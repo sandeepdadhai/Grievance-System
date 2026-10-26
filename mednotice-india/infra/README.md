@@ -96,7 +96,7 @@ file (mode `0600`).
 
 ## Verified after deploy
 
-Deployed from commit `a82b7f6` ("Add facility case workspaces, authority dispatch and AWS deployment tooling").
+Deployed from commit `99e3a70` ("Notify registered patients over WhatsApp when a case is filed and when it changes").
 
 | Check | Result |
 | --- | --- |
@@ -107,6 +107,11 @@ Deployed from commit `a82b7f6` ("Add facility case workspaces, authority dispatc
 | cross-facility read (AIIMS → KEM case) | 403 |
 | data volume | `/dev/nvme1n1` ext4 mounted at `/var/lib/mednotice`, 9.8 GB |
 | `systemctl restart mednotice` | service active, same cases and valid audit chain afterwards |
+| WhatsApp on submit | new patient opted in with `+91 98100 01234`, filed `CASE-2026-GBGL42` → notification `SENT`, `provider_ref OUTBOX:NTF-…wa.json` |
+| WhatsApp on status change | admin resolve → second message "… is now Resolved", delivered within one worker tick |
+| WhatsApp payload | outbox JSON carries the case, status, outcome and the `PUBLIC_URL` link; `to: +919810001234` |
+| WhatsApp hygiene | 0 audit rows contain the clear number (`+91 ******1234` only), `users.phone_enc` starts `v1:` (encrypted) |
+| Communications log | `/api/admin/communications` lists both messages with the masked target and `NOTIFICATION_SENT` audit link |
 | SSM agent | snap active, "Set up control channel successfully" |
 
 ## Known limitations
