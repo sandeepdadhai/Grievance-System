@@ -1,4 +1,5 @@
 import { all, get } from "./db.js";
+import { maskWhatsAppNumber } from "./whatsapp.js";
 
 /**
  * Unified communication log.
@@ -323,7 +324,8 @@ function toDto(row: RawRow, links: Map<string, CommunicationAuditLink>): Communi
     country: row.country,
     authorityId: row.authority_id,
     channel: row.channel,
-    target: row.target,
+    // Patient phone numbers stay masked everywhere outside the delivery worker.
+    target: row.channel === "WHATSAPP" ? maskWhatsAppNumber(row.target) : row.target,
     status: row.status,
     subject: row.subject,
     summary: row.summary,

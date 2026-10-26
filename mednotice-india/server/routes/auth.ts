@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import { get, nowIso, run } from "../db.js";
-import { hashPassword, randomCode, verifyPassword } from "../crypto.js";
+import { decryptField, encryptField, hashPassword, randomCode, verifyPassword } from "../crypto.js";
+import { maskWhatsAppNumber, normalizeWhatsAppNumber, whatsappStatus } from "../whatsapp.js";
 import { attachUser, createSession, destroySession, requireAuth } from "../auth.js";
 import { audit } from "../audit.js";
 import { asyncHandler, createRateLimiter, HttpError, meta, parseBody } from "../http.js";
@@ -25,6 +26,17 @@ const strongPassword = z
   .regex(/[0-9]/, "Include a digit")
   .regex(/[^A-Za-z0-9]/, "Include a symbol");
 
+function whatsappSession(user: UserRow) {
+  const stored = decryptField(user.phone_enc);
+  const digits = stored ? normalizeWhatsAppNumber(stored) : null;
+  return {
+    number: digits ? maskWhatsAppNumber(digits) : null,
+    optIn: Boolean(user.whatsapp_opt_in),
+    /** True when the server holds live WhatsApp Business credentials. */
+    connected: whatsappStatus().configured,
+  };
+}
+
 function sessionUser(user: UserRow) {
   const resolved = resolveRole(user.role);
   return {
@@ -40,6 +52,7 @@ function sessionUser(user: UserRow) {
     facilityId: user.facility_id ?? null,
     facilityName: user.facility_id ? (getFacility(user.facility_id)?.name ?? null) : null,
     mfaEnabled: Boolean(user.mfa_enabled),
+    whatsapp: whatsappSession(user),
   };
 }
 
@@ -161,5 +174,57 @@ authRouter.post(
       details: { sessionsRevoked: true, at: nowIso() },
     });
     res.json({ ok: true, message: "Password updated. All sessions were revoked." });
+  }),
+);
+
+const whatsappSchema = z.object({
+  phone: z.string().trim().max(40).optional().default(""),
+  optIn: z.boolean(),
+});
+
+/**
+ * WhatsApp notification preference for the signed-in user.
+ *
+ * The number is stored encrypted and only ever read back masked. Sending
+ * { optIn: false } stops messages without deleting the number, which is what a
+ * patient replying STOP expects.
+ */
+authRouter.post(
+  "/whatsapp",
+  attachUser,
+  requireAuth,
+  asyncHandler((req, res) => {
+    const body = parseBody(whatsappSchema, req.body);
+    const user = get<UserRow>("SELECT * FROM users WHERE id = ?", req.user!.id)!;
+    const current = decryptField(user.phone_enc);
+
+    if (!body.optIn) {
+      run("UPDATE users SET whatsapp_opt_in = 0 WHERE id = ?", user.id);
+      audit({
+        actor: { id: user.id, role: user.role },
+        action: "WHATSAPP_OPT_OUT",
+        entityType: "user",
+        entityId: user.id,
+        ...meta(req),
+        details: { number: current ? maskWhatsAppNumber(current) : null },
+      });
+      res.json({ ok: true, whatsapp: whatsappSession(get<UserRow>("SELECT * FROM users WHERE id = ?", user.id)!) });
+      return;
+    }
+
+    const digits = normalizeWhatsAppNumber(body.phone ?? "");
+    if (!digits) {
+      throw new HttpError(400, "Enter a valid WhatsApp number with its country code, for example +91 98100 01000.");
+    }
+    run("UPDATE users SET phone_enc = ?, whatsapp_opt_in = 1 WHERE id = ?", encryptField(digits), user.id);
+    audit({
+      actor: { id: user.id, role: user.role },
+      action: "WHATSAPP_OPT_IN",
+      entityType: "user",
+      entityId: user.id,
+      ...meta(req),
+      details: { number: maskWhatsAppNumber(digits), replaced: Boolean(current) },
+    });
+    res.json({ ok: true, whatsapp: whatsappSession(get<UserRow>("SELECT * FROM users WHERE id = ?", user.id)!) });
   }),
 );

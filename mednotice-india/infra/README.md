@@ -69,6 +69,31 @@ ssh -i terraform-key.pem ubuntu@13.238.116.94 'set -e
 Schema migrations and the facility demo accounts are applied by `seed()` at boot, so a restart is
 enough — the SQLite file on the data volume is kept.
 
+## Environment on the instance
+
+Runtime configuration lives in `/etc/mednotice.env` (read by the systemd unit). Edit it and
+`sudo systemctl restart mednotice` to apply. Current contents:
+
+```
+NODE_ENV=development
+DATA_DIR=/var/lib/mednotice
+PORT=4100
+PUBLIC_URL=http://13.238.116.94
+```
+
+`PUBLIC_URL` is what WhatsApp messages link back to; update it when a domain is attached. The
+WhatsApp channel needs two more values to leave simulation:
+
+```
+WHATSAPP_TOKEN=<permanent System User token>
+WHATSAPP_PHONE_NUMBER_ID=<phone number id>
+```
+
+Without them the channel stays in simulation: the message payload is written to
+`/var/lib/mednotice/outbox/*.wa.json` and recorded as `SENT` with provider `OUTBOX`, so a reviewer can
+see exactly what would have been delivered. Keep the token out of the repo — it belongs only in this
+file (mode `0600`).
+
 ## Verified after deploy
 
 Deployed from commit `a82b7f6` ("Add facility case workspaces, authority dispatch and AWS deployment tooling").

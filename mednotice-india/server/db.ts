@@ -309,6 +309,12 @@ ensureColumn("cases", "authority_status_at", "TEXT");
 ensureColumn("cases", "authority_reference", "TEXT");
 ensureColumn("transmissions", "reference", "TEXT");
 ensureColumn("adapters", "status_endpoint", "TEXT");
+/** WhatsApp number for patient notifications (AES-256-GCM encrypted). */
+ensureColumn("users", "phone_enc", "TEXT");
+ensureColumn("users", "whatsapp_opt_in", "INTEGER NOT NULL DEFAULT 0");
+/** Queue payload for channels that need structured fields (WhatsApp templates). */
+ensureColumn("notifications", "meta_json", "TEXT");
+ensureColumn("notifications", "provider_ref", "TEXT");
 
 export function nowIso(): string {
   return new Date().toISOString();

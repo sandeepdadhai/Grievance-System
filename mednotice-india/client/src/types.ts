@@ -16,6 +16,12 @@ export type User = {
   /** Facility this account is bound to; null means state-wide scope. */
   facilityId?: string | null;
   facilityName?: string | null;
+  /**
+   * WhatsApp notification preference. `number` is always masked, and
+   * `connected` reports whether the server holds live WhatsApp Business
+   * credentials (otherwise messages are simulated into the outbox).
+   */
+  whatsapp?: { number: string | null; optIn: boolean; connected: boolean };
 };
 
 export type PermissionDefinition = {

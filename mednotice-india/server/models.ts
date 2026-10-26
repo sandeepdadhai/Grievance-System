@@ -19,6 +19,10 @@ export type UserRow = {
   mfa_enabled: number;
   last_login_at: string | null;
   created_at: string;
+  /** WhatsApp number for patient notifications (AES-256-GCM encrypted). */
+  phone_enc: string | null;
+  /** 1 once the user explicitly asked for WhatsApp updates. */
+  whatsapp_opt_in: number | null;
 };
 
 export type CaseRow = {

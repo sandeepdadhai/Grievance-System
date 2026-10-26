@@ -5,6 +5,7 @@ import { randomCode } from "./crypto.js";
 import { findAuthority } from "./registry.js";
 import { resolveAdapter } from "./adapters/index.js";
 import { buildStatusRequest, parseStatusResponse, simulatedStatus, type RemoteStatus } from "./adapters/status.js";
+import { notifyCaseStatusChange } from "./notifications.js";
 import type { CaseRow } from "./models.js";
 
 /**
@@ -198,6 +199,9 @@ export function applyAuthorityStatus(
       previousStatus: caseRow.status,
     },
   });
+
+  // A status pulled from the department is a status the patient should hear about.
+  notifyCaseStatusChange({ ...caseRow, status: mapped, resolved_at: resolvedAt }, caseRow.status);
 
   return { applied: true, caseStatus: mapped };
 }

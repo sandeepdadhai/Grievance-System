@@ -17,6 +17,7 @@ import { triage } from "../triage.js";
 import { verifyDocument, bundleStatus } from "../verification/index.js";
 import { transmitCase } from "../routing.js";
 import { listStatusSyncs } from "../authority-status.js";
+import { queueWhatsAppNotice } from "../notifications.js";
 
 export const casesRouter = Router();
 
@@ -308,6 +309,9 @@ casesRouter.post(
     }
 
     const fresh = get<CaseRow>("SELECT * FROM cases WHERE id = ?", caseId)!;
+    // The patient's WhatsApp receipt does not depend on authority routing: it is
+    // queued even when the transmission fails, and the queue retries on its own.
+    queueWhatsAppNotice(fresh, "CASE_SUBMITTED");
     const actor = patientUser ? { role: "PATIENT" as const, id: patientUser.id } : { role: "PATIENT" as const, id: "guest" };
     res.status(201).json({
       case: caseToDto(fresh, { ...actor, isOwner: true }, docRows),

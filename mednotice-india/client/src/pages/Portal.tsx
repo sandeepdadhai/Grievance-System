@@ -6,9 +6,13 @@ import type { CaseDto } from "../types";
 import { Alert, Card, Icon, PriorityBadge, Spinner, StatusBadge, VerificationBadge } from "../components/ui";
 
 export default function Portal() {
-  const { user } = useAuth();
+  const { user, refresh } = useAuth();
   const [cases, setCases] = useState<CaseDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [phone, setPhone] = useState("");
+  const [waBusy, setWaBusy] = useState(false);
+  const [waNote, setWaNote] = useState<string | null>(null);
+  const [waError, setWaError] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -16,6 +20,24 @@ export default function Portal() {
       .then((r) => setCases(r.cases))
       .catch((err) => setError((err as Error).message));
   }, []);
+
+  const whatsapp = user?.whatsapp;
+
+  async function saveWhatsApp(optIn: boolean) {
+    setWaBusy(true);
+    setWaError(null);
+    setWaNote(null);
+    try {
+      await api.post("/api/auth/whatsapp", { phone, optIn });
+      await refresh();
+      setPhone("");
+      setWaNote(optIn ? "Saved. This number now receives updates for your cases." : "WhatsApp updates are off. Your number is kept on file.");
+    } catch (err) {
+      setWaError((err as Error).message);
+    } finally {
+      setWaBusy(false);
+    }
+  }
 
   return (
     <section className="section" style={{ maxWidth: 1080 }}>
@@ -65,6 +87,60 @@ export default function Portal() {
           );
         })}
       </div>
+
+      <Card style={{ marginTop: 18 }}>
+        <div className="row-between" style={{ alignItems: "flex-start", gap: 18 }}>
+          <div style={{ minWidth: 0 }}>
+            <span className="eyebrow">Notifications</span>
+            <h3 style={{ marginTop: 4 }}>WhatsApp updates</h3>
+            <p className="small muted" style={{ marginTop: 4, maxWidth: 520 }}>
+              Get one WhatsApp message when a grievance is received, and another whenever its status changes. Only the case
+              reference, facility, category and status are included — never your complaint text or documents.
+            </p>
+          </div>
+          <span
+            className={`badge ${whatsapp?.connected ? "ok" : "warn"}`}
+            title={whatsapp?.connected ? "Live WhatsApp Business channel" : "No WhatsApp Business credentials on this server"}
+          >
+            {whatsapp?.connected ? "Live channel" : "Simulation mode"}
+          </span>
+        </div>
+
+        {whatsapp?.number && (
+          <p className="small" style={{ marginTop: 12 }}>
+            Number on file: <span className="mono">{whatsapp.number}</span>{" "}
+            <span className="faint">· {whatsapp.optIn ? "updates on" : "updates paused"}</span>
+          </p>
+        )}
+
+        {waError && <Alert tone="error">{waError}</Alert>}
+        {waNote && <Alert tone="success">{waNote}</Alert>}
+        {!whatsapp?.connected && (
+          <p className="tiny faint" style={{ marginTop: 10 }}>
+            This deployment has no WhatsApp Business credentials, so messages are written to the server outbox instead of
+            being delivered. The workflow is identical once credentials are added.
+          </p>
+        )}
+
+        <div className="row" style={{ gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+          <input
+            className="input"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+91 98100 01000"
+            aria-label="WhatsApp number"
+            style={{ maxWidth: 260 }}
+          />
+          <button className="btn primary" disabled={waBusy || !phone.trim()} onClick={() => void saveWhatsApp(true)} type="button">
+            {waBusy ? <span className="spinner" /> : whatsapp?.optIn ? "Update number" : "Enable updates"}
+          </button>
+          {whatsapp?.optIn && (
+            <button className="btn ghost" disabled={waBusy} onClick={() => void saveWhatsApp(false)} type="button">
+              Turn off
+            </button>
+          )}
+        </div>
+      </Card>
 
       <p className="small faint" style={{ marginTop: 18 }}>
         Looking for a guest submission? <Link to="/track">Track with a case reference and access code</Link>.

@@ -153,7 +153,8 @@ Module boundaries live in `server/`:
 | `server/triage.ts` | Clinical prioritisation + categorisation + Indian regulatory citations |
 | `server/adapters/` | FHIR, HL7 v2, REST template, SOAP implementations |
 | `server/routing.ts` | Payload masking, transmission, adapter acknowledgement handling |
-| `server/notifications.ts` | Persisted queue, retry/backoff, email outbox, signed webhooks |
+| `server/notifications.ts` | Persisted queue, retry/backoff, email outbox, signed webhooks, WhatsApp patient notices |
+| `server/whatsapp.ts` | WhatsApp Cloud API transport: number normalisation, template/text payloads, simulated outbox |
 | `server/audit.ts` | Append-only hash chain and verification |
 | `server/routes/` | Public, auth, cases, documents, admin, roles, community, assistant, directory, webhook sink |
 
@@ -247,6 +248,15 @@ demo works offline.
 Every routed case enqueues email (written to `data/outbox/*.eml` in this build) and webhook deliveries; P1 adds a
 duty-officer escalation. Webhooks are HMAC-SHA256 signed with `x-mednotice-signature`. Failures retry with
 exponential backoff up to five attempts. Sandbox hosts are delivered to a local inbox so the flow is observable.
+
+**WhatsApp to registered patients.** A patient who has opted in on their portal page gets a WhatsApp message when a
+grievance is received and another whenever its status changes (resolved, reopened, or a status pulled from the health
+authority). The number is stored AES-256-GCM encrypted on the user record and only ever read back masked; the audit
+trail and the communications log hold `+91 ******1000`, never the full number. Messages carry the case reference,
+facility, category and status — never the complaint text, documents or internal reviewer notes. Guests and patients
+without opt-in are not messaged, and **Turn off** on the portal stops the channel immediately. Delivery uses the
+message queue, so a failed send retries with the existing backoff and shows up as failed in the admin notifications
+list. See [WhatsApp delivery](#whatsapp-delivery) for credentials.
 
 **6. Admin console**
 India-wide metrics (open, P1, SLA breaches, verification queue, SLA compliance, 14-day trend, priority donut,
@@ -383,6 +393,51 @@ The runtime path above needs no code change. If you prefer to ship a state as co
 3. Add an adapter row (UI → Adapters → New adapter) with protocol, endpoint and mapping; or rely on the
    configuration-only fallback derived from the authority's `adapter` code.
 4. Nothing in the verification, triage or audit modules changes.
+
+## WhatsApp delivery
+
+The channel talks to the **WhatsApp Cloud API** (Meta Graph API) directly over HTTPS — no SDK, no extra dependency.
+Two values switch it from simulation to live delivery:
+
+| Variable | Purpose |
+| --- | --- |
+| `WHATSAPP_TOKEN` | Permanent System User access token with `whatsapp_business_messaging` permission |
+| `WHATSAPP_PHONE_NUMBER_ID` | Phone number id of the sending WhatsApp Business number (not the phone number itself) |
+| `WHATSAPP_TEMPLATE_NAME` | Pre-approved message template. Default `mednotice_case_update`; set to an empty string to send free-form text instead (works only inside a 24-hour customer service window or a sandbox) |
+| `WHATSAPP_TEMPLATE_LANG` | Template language code, default `en` |
+| `WHATSAPP_API_VERSION` | Graph API version, default `v21.0` |
+| `WHATSAPP_DEFAULT_COUNTRY` | Country code assumed for numbers typed without one, default `91` |
+| `WHATSAPP_SIMULATE` | `1` forces simulation even when credentials are present |
+| `WHATSAPP_ENABLED` | `0` disables the channel entirely |
+| `PUBLIC_URL` | Origin used for the "Open the case" link in messages |
+
+**Getting the credentials.** In Meta Business Suite → WhatsApp Manager, register the business number, then create a
+System User in Business Settings with a permanent token. The phone number id is shown on the API Setup page. Because
+business-initiated messages are restricted, create and submit a template with three body parameters, for example:
+
+```
+MedNotice India: case {{1}} {{2}}. {{3}}. Open your patient workspace for details.
+```
+
+Approval usually takes minutes. Until then use `WHATSAPP_SIMULATE=1` and the outbox.
+
+**Simulation mode (the default).** With no credentials the channel writes the exact payload it would have sent to
+`data/outbox/<notification>.wa.json`, marks the notification `SENT` with provider ref `OUTBOX:<file>`, and shows
+"Simulation mode" on the patient portal. Nothing leaves the machine, so the whole flow is demonstrable offline.
+
+**What is sent.** One message on submission (`CASE_SUBMITTED`) and one per status change (`CASE_STATUS_CHANGED`: received,
+under review, resolved, reopened, or a status pulled from the authority). Only registered patients who opted in are
+messaged — the panel lives on the patient portal (**WhatsApp updates**), where the number can be changed or turned off.
+
+**Verifying on a deployment.**
+
+```bash
+curl -s http://<host>/api/admin/notifications | jq '.whatsapp'   # channel mode, template, sender hint
+curl -s http://<host>/api/admin/notifications | jq '.notifications[] | select(.channel=="WHATSAPP")'
+```
+
+With simulation on, `provider_ref` shows `OUTBOX:<file>`; on the instance the file is under
+`/var/lib/mednotice/outbox`. With live credentials it shows the WhatsApp message id (`wamh…`) returned by Meta.
 
 ## Tests
 

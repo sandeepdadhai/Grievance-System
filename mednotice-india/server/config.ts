@@ -26,6 +26,29 @@ export const DISPATCH_MAX_ATTEMPTS = Math.max(1, Number(process.env.DISPATCH_MAX
 /** Timeout for a single authority status request. */
 export const STATUS_REQUEST_TIMEOUT_MS = Math.max(1_000, Number(process.env.STATUS_REQUEST_TIMEOUT_MS ?? 10_000));
 
+/**
+ * WhatsApp Cloud API (Meta) — patient notifications.
+ *
+ * A live channel needs WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID from a
+ * WhatsApp Business account. With either missing (or WHATSAPP_SIMULATE=1) the
+ * channel runs in local simulation: messages are written to $DATA_DIR/outbox
+ * and recorded as SENT with provider OUTBOX, so the workflow stays fully
+ * demonstrable without a Meta account. WHATSAPP_ENABLED=0 turns the channel
+ * off entirely.
+ */
+export const WHATSAPP_ENABLED = process.env.WHATSAPP_ENABLED !== "0";
+export const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN ?? "";
+export const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID ?? "";
+export const WHATSAPP_API_VERSION = process.env.WHATSAPP_API_VERSION ?? "v21.0";
+/** Country code assumed for numbers entered without one (India by default). */
+export const WHATSAPP_DEFAULT_COUNTRY = process.env.WHATSAPP_DEFAULT_COUNTRY ?? "91";
+/** Pre-approved message template. Empty falls back to a free-form text message. */
+export const WHATSAPP_TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_NAME ?? "mednotice_case_update";
+export const WHATSAPP_TEMPLATE_LANG = process.env.WHATSAPP_TEMPLATE_LANG ?? "en";
+export const WHATSAPP_SIMULATE = process.env.WHATSAPP_SIMULATE === "1";
+/** Public origin used in message links; falls back to a relative path. */
+export const PUBLIC_URL = (process.env.PUBLIC_URL ?? "").replace(/\/+$/, "");
+
 for (const dir of [DATA_DIR, STORAGE_DIR, OUTBOX_DIR]) {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 }

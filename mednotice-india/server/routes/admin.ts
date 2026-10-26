@@ -2,8 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { all, count, get, nowIso, run } from "../db.js";
 import { JURISDICTIONS, findJurisdiction, type Priority } from "../config.js";
-import { encryptField, hashPassword, maskPayload, randomCode } from "../crypto.js";
-import { audit, listAudit, verifyAuditChain } from "../audit.js";
+import { encryptField, hashPassword, maskPayload, randomCode } from "../crypto.js";import { audit, listAudit, verifyAuditChain } from "../audit.js";
 import { listAuditTrail, trailStatuses } from "../audit-trail.js";
 import { COMMUNICATION_KINDS } from "../communications.js";
 import { assertCaseAccess, scopeCountry, scopeFacility } from "../access.js";
@@ -14,7 +13,8 @@ import { resolveRole, roleExists } from "../roles.js";
 import { caseToDto, documentToDto, type CaseRow, type DocumentRow, type Role, type UserRow } from "../models.js";
 import { resolveAdapter, implementationFor } from "../adapters/index.js";
 import { buildCasePayload, transmitCase } from "../routing.js";
-import { processPendingNotifications, requeueNotification } from "../notifications.js";
+import { processPendingNotifications, queueWhatsAppNotice, notifyCaseStatusChange, requeueNotification } from "../notifications.js";
+import { maskWhatsAppNumber, whatsappStatus } from "../whatsapp.js";
 
 export const adminRouter = Router();
 
@@ -423,6 +423,13 @@ adminRouter.post(
       ...meta(req),
       details: { outcome: body.outcome ?? null, note: body.note },
     });
+    // The patient is told directly; reviewer notes stay internal, only the
+    // patient-facing outcome is included.
+    notifyCaseStatusChange(
+      { ...caseRow, status: "RESOLVED", resolved_at: now, updated_at: now },
+      caseRow.status,
+      { outcome: body.outcome ?? null },
+    );
     res.json({ case: caseToDto({ ...caseRow, status: "RESOLVED", resolved_at: now, updated_at: now }, { role: req.user!.baseRole, id: req.user!.id }) });
   }),
 );
@@ -456,6 +463,7 @@ adminRouter.post(
       ...meta(req),
       details: { note: body.note },
     });
+    notifyCaseStatusChange({ ...caseRow, status: "UNDER_REVIEW", resolved_at: null }, caseRow.status);
     res.json({ ok: true });
   }),
 );
@@ -863,7 +871,11 @@ adminRouter.get(
     const rows = status
       ? all("SELECT * FROM notifications WHERE status = ? ORDER BY created_at DESC LIMIT 100", status)
       : all("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 100");
-    res.json({ notifications: rows });
+    // Phone targets are returned masked: the console never shows a full patient number.
+    const safe = (rows as Array<Record<string, unknown>>).map((row) =>
+      row.channel === "WHATSAPP" ? { ...row, target: maskWhatsAppNumber(String(row.target)) } : row,
+    );
+    res.json({ notifications: safe, whatsapp: whatsappStatus() });
   }),
 );
 
