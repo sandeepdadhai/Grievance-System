@@ -55,16 +55,33 @@ Run `./bootstrap.sh` once in a fresh account (it is idempotent and prints the tw
 `DATA_DIR` holds the SQLite database, the AES-encrypted uploads, the outbox and the generated
 master key, so **the data volume is the whole state** — snapshot it before any migration.
 
+## Deploying new code
+
+The instance tracks `origin/main`, so an update is three commands:
+
+```bash
+ssh -i terraform-key.pem ubuntu@13.238.116.94 'set -e
+  cd /srv/mednotice/Grievance-System && sudo git fetch origin main && sudo git checkout -f origin/main
+  cd mednotice-india && sudo npm ci --no-audit --no-fund && sudo npm run build
+  sudo systemctl restart mednotice'
+```
+
+Schema migrations and the facility demo accounts are applied by `seed()` at boot, so a restart is
+enough — the SQLite file on the data volume is kept.
+
 ## Verified after deploy
+
+Deployed from commit `a82b7f6` ("Add facility case workspaces, authority dispatch and AWS deployment tooling").
 
 | Check | Result |
 | --- | --- |
 | `http://13.238.116.94/api/health` | 200, `auditChain.valid: true` |
-| `http://13.238.116.94/` | 200, SPA bundle served by Caddy |
+| `/`, `/login`, `/admin/facility`, `/admin/dispatch`, `/admin/directory` | all 200, SPA bundle `index-WcWXxoZ1.js` |
 | sign-in `admin@mednotice.in` / `Admin!2345` | 200 + session cookie |
-| `/api/admin/overview` | 200, 9 seeded cases |
+| sign-in `facility.aiims@mednotice.in` / `Facility!2345` | 200, `/api/admin/facility` returns FAC-IN-001 |
+| cross-facility read (AIIMS → KEM case) | 403 |
 | data volume | `/dev/nvme1n1` ext4 mounted at `/var/lib/mednotice`, 9.8 GB |
-| `systemctl restart mednotice` | service active, same 9 cases and valid audit chain afterwards |
+| `systemctl restart mednotice` | service active, same cases and valid audit chain afterwards |
 | SSM agent | snap active, "Set up control channel successfully" |
 
 ## Known limitations
@@ -74,8 +91,8 @@ master key, so **the data volume is the whole state** — snapshot it before any
 * **`NODE_ENV=development` on the instance.** With `NODE_ENV=production` the session cookie is
   `Secure`, so it is discarded over plain HTTP and every authenticated request returns 401. Switch
   it back to `production` the moment HTTPS exists.
-* **Older code than this workspace.** The instance runs commit `cc660efc`, which does not include
-  the "My facility" section built here (`/api/admin/facility` returns 404 on the server).
+* **The instance runs `origin/main`.** Nothing is deployed automatically — run the update commands above
+  after pushing.
 * **SSH and the app port are open to `0.0.0.0/0`.** Restrict with
   `var.ssh_cidr`, and drop the 4100 rule once Caddy is the only entry point.
 * No Elastic IP: the public address changes if the instance is stopped and started.
