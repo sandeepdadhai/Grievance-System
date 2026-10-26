@@ -37,6 +37,8 @@ export type AdapterConfig = {
   code: string;
   kind: AdapterKind;
   endpoint: string;
+  /** Optional per-adapter status endpoint used to poll the department. */
+  statusEndpoint?: string | null;
   authType: string;
   authConfig?: Record<string, string> | null;
   mapping: Record<string, unknown>;

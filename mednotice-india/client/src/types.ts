@@ -13,6 +13,9 @@ export type User = {
   permissions: string[];
   country: string | null;
   organisation: string | null;
+  /** Facility this account is bound to; null means state-wide scope. */
+  facilityId?: string | null;
+  facilityName?: string | null;
 };
 
 export type PermissionDefinition = {
@@ -113,10 +116,55 @@ export type Jurisdiction = {
 export type Facility = {
   id: string;
   name: string;
-  authority_id: string;
+  authorityId: string;
   country: string;
   city: string | null;
   status: string;
+};
+
+export type AuthorityDto = {
+  id: string;
+  name: string;
+  country: string;
+  region: string;
+  adapter: string;
+  contactEmail: string;
+  webhook: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  facilityCount: number;
+  caseCount: number;
+};
+
+export type FacilityCase = CaseDto & {
+  documentCount: number;
+  pendingDocuments: number;
+  documents: DocumentDto[];
+};
+
+export type FacilityWorkspace = {
+  facility: FacilityDto;
+  counts: {
+    total: number;
+    open: number;
+    awaitingVerification: number;
+    resolved: number;
+    overdue: number;
+  };
+  cases: FacilityCase[];
+};
+
+export type FacilityDto = {
+  id: string;
+  name: string;
+  authorityId: string;
+  country: string;
+  city: string | null;
+  letterheadKeywords: string[];
+  status: string;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 
 export type Finding = {
@@ -206,6 +254,10 @@ export type CaseDto = {
   updatedAt: string;
   slaDueAt: string;
   resolvedAt: string | null;
+  /** Latest status reported by the receiving health authority. */
+  authorityStatus: string | null;
+  authorityStatusAt: string | null;
+  authorityReference: string | null;
   documents?: DocumentDto[];
   documentCount?: number;
 };
@@ -222,6 +274,7 @@ export type CaseDetail = {
     http_status: number | null;
     latency_ms: number | null;
     created_at: string;
+    reference?: string | null;
   }>;
   notifications: Array<{
     id: string;
@@ -234,6 +287,28 @@ export type CaseDetail = {
     created_at: string;
     sent_at: string | null;
   }>;
+  authorityStatus: {
+    status: string | null;
+    checkedAt: string | null;
+    reference: string | null;
+    history: Array<{
+      id: string;
+      case_id: string;
+      transmission_id: string | null;
+      authority_id: string;
+      adapter_code: string;
+      endpoint: string;
+      status: string;
+      remote_status: string | null;
+      remote_reference: string | null;
+      message: string | null;
+      http_status: number | null;
+      latency_ms: number | null;
+      applied: number;
+      simulated: number;
+      checked_at: string;
+    }>;
+  };
   activity: Array<{ ts: string; actor_id: string | null; actor_role: string | null; action: string; details: Record<string, unknown> }>;
   piiVisible: boolean;
 };
@@ -282,6 +357,8 @@ export type AdapterDto = {
   country: string;
   kind: string;
   endpoint: string;
+  /** Per-adapter endpoint polled for the department's latest case status. */
+  statusEndpoint: string | null;
   authType: string;
   mapping: Record<string, unknown>;
   enabled: boolean;

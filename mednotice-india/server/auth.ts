@@ -6,6 +6,7 @@ import { HttpError, meta } from "./http.js";
 import type { Role, UserRow } from "./models.js";
 import { audit } from "./audit.js";
 import { resolveRole, type PermissionKey } from "./roles.js";
+import { getFacility } from "./registry.js";
 
 export type SessionUser = NonNullable<Request["user"]>;
 
@@ -84,6 +85,8 @@ export function attachUser(req: Request, _res: Response, next: NextFunction): vo
     permissions: resolved.permissions,
     country: row.country,
     organisation: row.organisation,
+    facilityId: row.facility_id ?? null,
+    facilityName: row.facility_id ? (getFacility(row.facility_id)?.name ?? null) : null,
   };
   req.sessionId = row.session_id;
   next();

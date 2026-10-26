@@ -14,7 +14,7 @@ export default function AdminAdapters() {
   const [notice, setNotice] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ adapter: AdapterDto; caseId: string; result: Record<string, unknown> | null; busy: boolean } | null>(null);
   const [editing, setEditing] = useState<AdapterDto | "new" | null>(null);
-  const [form, setForm] = useState({ code: "", name: "", country: "IN", kind: "FHIR", endpoint: "", simulate: true, enabled: true, mapping: "{}" });
+  const [form, setForm] = useState({ code: "", name: "", country: "IN", kind: "FHIR", endpoint: "", statusEndpoint: "", simulate: true, enabled: true, mapping: "{}" });
   const [expandedMapping, setExpandedMapping] = useState<string | null>(null);
 
   async function load() {
@@ -42,7 +42,7 @@ export default function AdminAdapters() {
   }
 
   function openNew() {
-    setForm({ code: "", name: "", country: "IN", kind: "FHIR", endpoint: "https://", simulate: true, enabled: true, mapping: "{\n  \n}" });
+    setForm({ code: "", name: "", country: "IN", kind: "FHIR", endpoint: "https://", statusEndpoint: "", simulate: true, enabled: true, mapping: "{\n  \n}" });
     setEditing("new");
   }
 
@@ -53,6 +53,7 @@ export default function AdminAdapters() {
       country: adapter.country,
       kind: adapter.kind,
       endpoint: adapter.endpoint,
+      statusEndpoint: adapter.statusEndpoint ?? "",
       simulate: adapter.simulate,
       enabled: adapter.enabled,
       mapping: JSON.stringify(adapter.mapping, null, 2),
@@ -70,7 +71,7 @@ export default function AdminAdapters() {
       return;
     }
     try {
-      await api.post("/api/admin/adapters", { ...form, mapping });
+      await api.post("/api/admin/adapters", { ...form, statusEndpoint: form.statusEndpoint.trim() || undefined, mapping });
       setNotice(`${form.code} saved. New configs take effect on the next routing attempt.`);
       setEditing(null);
       await load();
@@ -123,6 +124,9 @@ export default function AdminAdapters() {
                   </div>
                   <div className="small" style={{ marginTop: 4 }}>{adapter.name}</div>
                   <div className="tiny faint mono" style={{ marginTop: 4, wordBreak: "break-all" }}>{adapter.endpoint}</div>
+                  {adapter.statusEndpoint && (
+                    <div className="tiny faint mono" style={{ marginTop: 2, wordBreak: "break-all" }}>status → {adapter.statusEndpoint}</div>
+                  )}
                 </div>
                 <div className="stack" style={{ gap: 6, alignItems: "flex-end" }}>
                   <Badge tone={adapter.enabled ? "ok" : "bad"} dot>{adapter.enabled ? "Enabled" : "Disabled"}</Badge>
@@ -213,6 +217,11 @@ export default function AdminAdapters() {
             <div className="field"><label htmlFor="ad-country">Country</label><select id="ad-country" className="select" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })}>{COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></div>
             <div className="field"><label htmlFor="ad-kind">Protocol</label><select id="ad-kind" className="select" value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>{["FHIR", "HL7v2", "REST", "SOAP"].map((k) => <option key={k} value={k}>{k}</option>)}</select></div>
             <div className="field full"><label htmlFor="ad-endpoint">Endpoint</label><input id="ad-endpoint" className="input mono" value={form.endpoint} onChange={(e) => setForm({ ...form, endpoint: e.target.value })} /></div>
+            <div className="field full">
+              <label htmlFor="ad-status-endpoint">Status endpoint</label>
+              <input id="ad-status-endpoint" className="input mono" value={form.statusEndpoint} onChange={(e) => setForm({ ...form, statusEndpoint: e.target.value })} placeholder="https://authority.example.in/grievance/{{caseId}}/status" />
+              <span className="hint">Polled by the status cron job. {"{{caseId}}"} and {"{{reference}}"} are substituted. Leave blank to derive it from the delivery endpoint.</span>
+            </div>
             <div className="field full">
               <label htmlFor="ad-mapping">Mapping JSON</label>
               <textarea id="ad-mapping" className="textarea mono" style={{ minHeight: 160, fontSize: 12 }} value={form.mapping} onChange={(e) => setForm({ ...form, mapping: e.target.value })} />

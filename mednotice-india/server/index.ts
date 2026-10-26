@@ -2,6 +2,7 @@ import { createApp } from "./app.js";
 import { PORT } from "./config.js";
 import { seed } from "./seed.js";
 import { startNotificationWorker } from "./notifications.js";
+import { startScheduler, stopScheduler } from "./scheduler.js";
 import { verifyAuditChain } from "./audit.js";
 
 async function main(): Promise<void> {
@@ -12,9 +13,11 @@ async function main(): Promise<void> {
     console.log(`[mednotice] audit chain: ${verifyAuditChain().valid ? "valid" : "BROKEN"}`);
   });
   startNotificationWorker();
+  startScheduler();
 
   const shutdown = (signal: string) => {
     console.log(`[mednotice] ${signal} received, shutting down`);
+    stopScheduler();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 5000).unref();
   };

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
-import { JURISDICTIONS, findJurisdiction } from "../config.js";
+import { JURISDICTIONS } from "../config.js";
+import { findAuthority, listAuthorities, listFacilities } from "../registry.js";
 import { all, get } from "../db.js";
 import { sha256Hex, timingSafeEqualStr } from "../crypto.js";
 import { audit } from "../audit.js";
@@ -23,7 +24,7 @@ publicRouter.get("/jurisdictions", (_req, res) => {
       slaHours: j.slaHours,
       crossBorderRestricted: j.crossBorderRestricted,
       complaintCategories: j.complaintCategories,
-      authorities: j.authorities.map((a) => ({ id: a.id, name: a.name, region: a.region, adapter: a.adapter, contactEmail: a.contactEmail })),
+      authorities: listAuthorities({ country: j.code }).map((a) => ({ id: a.id, name: a.name, region: a.region, adapter: a.adapter, contactEmail: a.contactEmail })),
     })),
   });
 });
@@ -32,10 +33,18 @@ publicRouter.get(
   "/facilities",
   asyncHandler((req, res) => {
     const authorityId = typeof req.query.authority === "string" ? req.query.authority : undefined;
-    const rows = authorityId
-      ? all("SELECT id, name, authority_id, country, city, status FROM facilities WHERE authority_id = ? AND status != 'CLOSED' ORDER BY name", authorityId)
-      : all("SELECT id, name, authority_id, country, city, status FROM facilities WHERE status != 'CLOSED' ORDER BY name");
-    res.json({ facilities: rows });
+    const facilities = listFacilities({
+      authorityId,
+      patientVisibleOnly: true,
+    }).map((f) => ({
+      id: f.id,
+      name: f.name,
+      authorityId: f.authorityId,
+      country: f.country,
+      city: f.city,
+      status: f.status,
+    }));
+    res.json({ facilities });
   }),
 );
 
@@ -62,7 +71,6 @@ publicRouter.post(
       });
       throw new HttpError(404, "No case matches that reference and access code.");
     }
-    const jurisdiction = findJurisdiction(row.country);
     const docs = all<{ verification_status: string; filename: string; score: number }>(
       "SELECT verification_status, filename, score FROM documents WHERE case_id = ?",
       row.id,
@@ -86,7 +94,7 @@ publicRouter.post(
         country: row.country,
         region: row.region,
         authorityId: row.authority_id,
-        authorityName: jurisdiction?.authorities.find((a) => a.id === row.authority_id)?.name ?? null,
+        authorityName: findAuthority(row.authority_id)?.authority.name ?? null,
         verificationStatus: row.verification_status,
         createdAt: row.created_at,
         updatedAt: row.updated_at,

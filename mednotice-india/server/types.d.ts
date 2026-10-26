@@ -15,6 +15,9 @@ declare global {
         permissions: string[];
         country: string | null;
         organisation: string | null;
+        /** Facility binding — narrows every case query to this facility. */
+        facilityId: string | null;
+        facilityName: string | null;
       };
       sessionId?: string;
     }

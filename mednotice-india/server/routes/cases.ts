@@ -11,10 +11,12 @@ import { assertCaseAccess } from "../access.js";
 import { asyncHandler, createRateLimiter, HttpError, meta, parseBody } from "../http.js";
 import { requireAuth } from "../auth.js";
 import { canSeePii, caseToDto, type CaseRow, type DocumentRow, type UserRow } from "../models.js";
-import { findAuthority, findJurisdiction } from "../config.js";
+import { findJurisdiction } from "../config.js";
+import { findAuthority, getAuthority, getFacility } from "../registry.js";
 import { triage } from "../triage.js";
 import { verifyDocument, bundleStatus } from "../verification/index.js";
 import { transmitCase } from "../routing.js";
+import { listStatusSyncs } from "../authority-status.js";
 
 export const casesRouter = Router();
 
@@ -67,19 +69,24 @@ casesRouter.post(
 
     const jurisdiction = findJurisdiction(body.country);
     if (!jurisdiction) throw new HttpError(400, "Unsupported jurisdiction");
-    const authorityMatch = findAuthority(body.authorityId);
-    if (!authorityMatch || authorityMatch.jurisdiction.code !== body.country) {
+    const authorityRecord = getAuthority(body.authorityId);
+    if (!authorityRecord || authorityRecord.country !== body.country) {
       throw new HttpError(400, "Selected health authority does not belong to the selected country");
     }
+    if (authorityRecord.status !== "ACTIVE") {
+      throw new HttpError(400, "The selected health authority is not currently accepting grievances");
+    }
+    const authorityMatch = findAuthority(body.authorityId);
+    if (!authorityMatch) throw new HttpError(400, "Selected health authority is not configured");
     if (!jurisdiction.complaintCategories.includes(body.category)) {
       throw new HttpError(400, "Category is not valid for this jurisdiction");
     }
-    const facility = get<{ id: string; name: string; authority_id: string; country: string }>(
-      "SELECT id, name, authority_id, country FROM facilities WHERE id = ?",
-      body.facilityId,
-    );
-    if (!facility || facility.authority_id !== body.authorityId) {
+    const facility = getFacility(body.facilityId);
+    if (!facility || facility.authorityId !== body.authorityId) {
       throw new HttpError(400, "Selected facility is not registered with that health authority");
+    }
+    if (facility.status !== "VERIFIED") {
+      throw new HttpError(400, "Selected facility is not open for new grievances");
     }
     if (!body.consentDataSharing) {
       throw new HttpError(400, "Data-processing consent is required to submit a grievance");
@@ -355,6 +362,12 @@ casesRouter.get(
       reviews,
       transmissions,
       notifications,
+      authorityStatus: {
+        status: row.authority_status ?? null,
+        checkedAt: row.authority_status_at ?? null,
+        reference: row.authority_reference ?? null,
+        history: listStatusSyncs(row.id, 20),
+      },
       activity: activity.map((a) => ({ ...a, details: JSON.parse(a.details_json) })),
       piiVisible: canSeePii({ role: req.user!.baseRole, id: req.user!.id, isOwner: row.patient_user_id === req.user!.id }),
     });

@@ -6,6 +6,7 @@ import { attachUser, createSession, destroySession, requireAuth } from "../auth.
 import { audit } from "../audit.js";
 import { asyncHandler, createRateLimiter, HttpError, meta, parseBody } from "../http.js";
 import { resolveRole } from "../roles.js";
+import { getFacility } from "../registry.js";
 import type { UserRow } from "../models.js";
 
 export const authRouter = Router();
@@ -36,6 +37,8 @@ function sessionUser(user: UserRow) {
     permissions: resolved.permissions,
     country: user.country,
     organisation: user.organisation,
+    facilityId: user.facility_id ?? null,
+    facilityName: user.facility_id ? (getFacility(user.facility_id)?.name ?? null) : null,
     mfaEnabled: Boolean(user.mfa_enabled),
   };
 }

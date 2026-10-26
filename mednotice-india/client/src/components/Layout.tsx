@@ -82,14 +82,18 @@ function LogoutButton() {
 }
 
 const NAV = [
-  { to: "/admin", label: "Overview", icon: "grid" as const, end: true },
-  { to: "/admin/cases", label: "Cases", icon: "folder" as const },
-  { to: "/admin/delivery", label: "Delivery", icon: "send" as const },
-  { to: "/admin/community", label: "Community", icon: "message" as const },
-  { to: "/admin/adapters", label: "Adapters", icon: "plug" as const },
-  { to: "/admin/audit", label: "Audit log", icon: "activity" as const },
-  { to: "/admin/users", label: "Users & roles", icon: "users" as const },
-  { to: "/admin/compliance", label: "Compliance", icon: "shield" as const },
+  { to: "/admin", label: "Overview", icon: "grid" as const, end: true, group: "Operations" as const },
+  { to: "/admin/cases", label: "Cases", icon: "folder" as const, group: "Operations" as const },
+  { to: "/admin/facility", label: "My facility", icon: "building" as const, group: "Operations" as const },
+  { to: "/admin/dispatch", label: "Dispatch", icon: "truck" as const, group: "Operations" as const },
+  { to: "/admin/delivery", label: "Delivery", icon: "send" as const, group: "Operations" as const },
+  { to: "/admin/communications", label: "Communications", icon: "mail" as const, group: "Operations" as const },
+  { to: "/admin/community", label: "Community", icon: "message" as const, group: "Operations" as const },
+  { to: "/admin/directory", label: "Directory", icon: "building" as const, group: "Governance" as const },
+  { to: "/admin/adapters", label: "Adapters", icon: "plug" as const, group: "Governance" as const },
+  { to: "/admin/audit", label: "Audit log", icon: "activity" as const, group: "Governance" as const },
+  { to: "/admin/users", label: "Users & roles", icon: "users" as const, group: "Governance" as const },
+  { to: "/admin/compliance", label: "Compliance", icon: "shield" as const, group: "Governance" as const },
 ];
 
 export function AdminLayout() {
@@ -99,9 +103,11 @@ export function AdminLayout() {
   if (user.baseRole === "PATIENT") return <Navigate to="/portal" replace />;
 
   const nav = NAV.filter((item) => {
+    if (item.to === "/admin/facility") return Boolean(user.facilityId);
     if (item.to === "/admin/users") return user.baseRole === "SUPER_ADMIN";
     if (item.to === "/admin/audit") return user.baseRole === "SUPER_ADMIN" || hasPermission(user, "audit.view");
     if (item.to === "/admin/delivery") return hasPermission(user, "delivery.view");
+    if (item.to === "/admin/communications") return hasPermission(user, "delivery.view");
     if (item.to === "/admin/community") return hasPermission(user, "community.moderate");
     if (item.to === "/admin/compliance") return hasPermission(user, "compliance.view");
     return true;
@@ -113,7 +119,7 @@ export function AdminLayout() {
         <Brand />
         <div className="nav-group">
           <div className="nav-label">Operations</div>
-          {nav.slice(0, 4).map((item) => (
+          {nav.filter((item) => item.group === "Operations").map((item) => (
             <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
               <Icon name={item.icon} />
               <span>{item.label}</span>
@@ -122,8 +128,8 @@ export function AdminLayout() {
         </div>
         <div className="nav-group">
           <div className="nav-label">Governance</div>
-          {nav.slice(4).map((item) => (
-            <NavLink key={item.to} to={item.to} className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+          {nav.filter((item) => item.group === "Governance").map((item) => (
+            <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
               <Icon name={item.icon} />
               <span>{item.label}</span>
             </NavLink>
@@ -155,7 +161,11 @@ export function AdminLayout() {
         <div className="topbar">
           <div className="topbar-title">
             <span className="dot" />
-            {user.country ? "India · national scope" : "All India scope"}
+            {user.facilityName
+              ? `Facility scope · ${user.facilityName}`
+              : user.country
+                ? "India · national scope"
+                : "All India scope"}
             <span className="faint">·</span>
             <span className="faint">{user.organisation ?? "MedNotice India"}</span>
           </div>

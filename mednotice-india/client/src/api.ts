@@ -36,6 +36,15 @@ export const api = {
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
 
+export const COMMUNICATION_KIND_LABEL: Record<string, string> = {
+  NOTIFICATION: "Notification",
+  TRANSMISSION: "Transmission",
+  STATUS_SYNC: "Status pull",
+  WEBHOOK_EVENT: "Inbound webhook",
+  COMMUNITY_POST: "Community post",
+  COMMUNITY_COMMENT: "Community comment",
+};
+
 export const PRIORITY_META: Record<Priority, { label: string; short: string; color: string; description: string }> = {
   P1: { label: "Critical / Emergency", short: "P1", color: "#ff5d6c", description: "Immediate threat to life, severe malpractice or acute negligence" },
   P2: { label: "High / Urgent", short: "P2", color: "#ffa14a", description: "Serious complications, denied critical care or severe delay" },

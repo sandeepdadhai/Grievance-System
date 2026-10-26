@@ -12,6 +12,20 @@ export const IS_PROD = process.env.NODE_ENV === "production";
 export const SESSION_COOKIE = "mni_session";
 export const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
 
+/**
+ * Cron-style dispatch worker. `DISPATCH_CRON_ENABLED=0` turns the worker off
+ * (used by the test suite, which drives the cycles explicitly).
+ */
+export const DISPATCH_CRON_ENABLED = process.env.DISPATCH_CRON_ENABLED !== "0";
+export const DISPATCH_INTERVAL_MS = Math.max(5_000, Number(process.env.DISPATCH_INTERVAL_MS ?? 60_000));
+export const STATUS_SYNC_INTERVAL_MS = Math.max(10_000, Number(process.env.STATUS_SYNC_INTERVAL_MS ?? 300_000));
+/** A failed transmission is retried by the dispatcher after this delay. */
+export const DISPATCH_RETRY_DELAY_MS = Math.max(30_000, Number(process.env.DISPATCH_RETRY_DELAY_MS ?? 300_000));
+/** Maximum number of dispatcher attempts for a single case. */
+export const DISPATCH_MAX_ATTEMPTS = Math.max(1, Number(process.env.DISPATCH_MAX_ATTEMPTS ?? 3));
+/** Timeout for a single authority status request. */
+export const STATUS_REQUEST_TIMEOUT_MS = Math.max(1_000, Number(process.env.STATUS_REQUEST_TIMEOUT_MS ?? 10_000));
+
 for (const dir of [DATA_DIR, STORAGE_DIR, OUTBOX_DIR]) {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 }
@@ -153,14 +167,6 @@ export const JURISDICTIONS: Jurisdiction[] = [
 
 export function findJurisdiction(code: string): Jurisdiction | undefined {
   return JURISDICTIONS.find((j) => j.code === code.toUpperCase());
-}
-
-export function findAuthority(id: string): { jurisdiction: Jurisdiction; authority: Authority } | undefined {
-  for (const jurisdiction of JURISDICTIONS) {
-    const authority = jurisdiction.authorities.find((a) => a.id === id);
-    if (authority) return { jurisdiction, authority };
-  }
-  return undefined;
 }
 
 export const PRIORITIES: Priority[] = ["P1", "P2", "P3", "P4"];

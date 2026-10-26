@@ -11,11 +11,14 @@ type UserRow = {
   role: string;
   country: string | null;
   organisation: string | null;
+  facility_id: string | null;
   active: number;
   mfa_enabled: number;
   last_login_at: string | null;
   created_at: string;
 };
+
+type FacilityOption = { id: string; name: string; city: string | null; status: string };
 
 type RolesPayload = {
   roles: RoleDefinition[];
@@ -30,23 +33,26 @@ const emptyRoleForm = { key: null as string | null, name: "", description: "", b
 export default function AdminUsers() {
   const { user: me } = useAuth();
   const [users, setUsers] = useState<UserRow[] | null>(null);
+  const [facilities, setFacilities] = useState<FacilityOption[]>([]);
   const [rolesPayload, setRolesPayload] = useState<RolesPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [modal, setModal] = useState<"create" | "role" | { reset: UserRow } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "MINISTRY_REVIEWER", country: "", organisation: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "MINISTRY_REVIEWER", country: "", organisation: "", facilityId: "" });
   const [newPassword, setNewPassword] = useState("");
   const [roleForm, setRoleForm] = useState(emptyRoleForm);
 
   async function load() {
     try {
-      const [userRes, roleRes] = await Promise.all([
+      const [userRes, roleRes, facilityRes] = await Promise.all([
         api.get<{ users: UserRow[] }>("/api/admin/users"),
         api.get<RolesPayload>("/api/admin/roles"),
+        api.get<{ facilities: FacilityOption[] }>("/api/admin/directory/facilities"),
       ]);
       setUsers(userRes.users);
       setRolesPayload(roleRes);
+      setFacilities(facilityRes.facilities);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -74,10 +80,15 @@ export default function AdminUsers() {
     setBusy(true);
     setError(null);
     try {
-      await api.post("/api/admin/users", { ...form, country: form.country || undefined, organisation: form.organisation || undefined });
+      await api.post("/api/admin/users", {
+        ...form,
+        country: form.country || undefined,
+        organisation: form.organisation || undefined,
+        facilityId: form.facilityId || undefined,
+      });
       setNotice(`Created account for ${form.email}.`);
       setModal(null);
-      setForm({ name: "", email: "", password: "", role: "MINISTRY_REVIEWER", country: "", organisation: "" });
+      setForm({ name: "", email: "", password: "", role: "MINISTRY_REVIEWER", country: "", organisation: "", facilityId: "" });
       await load();
     } catch (err) {
       setError((err as Error).message);
@@ -180,7 +191,7 @@ export default function AdminUsers() {
           <div className="table-wrap">
             <table className="data">
               <thead>
-                <tr><th>User</th><th>Role</th><th>Jurisdiction</th><th>MFA</th><th>Last login</th><th>Status</th><th></th></tr>
+                <tr><th>User</th><th>Role</th><th>Facility</th><th>Jurisdiction</th><th>MFA</th><th>Last login</th><th>Status</th><th></th></tr>
               </thead>
               <tbody>
                 {users.map((u) => (
@@ -202,6 +213,19 @@ export default function AdminUsers() {
                           <option key={r.key} value={r.key}>{r.name}{r.builtin ? "" : " (custom)"}</option>
                         ))}
                         {!rolesPayload?.roles.some((r) => r.key === u.role) && <option value={u.role}>{u.role}</option>}
+                      </select>
+                    </td>
+                    <td>
+                      <select
+                        className="select"
+                        style={{ padding: "5px 26px 5px 8px", fontSize: 12, minWidth: 170 }}
+                        value={u.facility_id ?? ""}
+                        onChange={(e) => void patch(u.id, { facilityId: e.target.value || null }, e.target.value ? `${u.name} now works the ${facilities.find((f) => f.id === e.target.value)?.name ?? e.target.value} queue.` : `${u.name} now has state-wide scope.`)}
+                      >
+                        <option value="">State-wide</option>
+                        {facilities.map((f) => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
                       </select>
                     </td>
                     <td>{u.country ?? <span className="faint">All India</span>}</td>
@@ -291,7 +315,7 @@ export default function AdminUsers() {
         {[
           ["Super Administrator", "Full access, user management, adapter configuration and India-wide metrics."],
           ["Ministry Reviewer", "Country-scoped review, triage override, document approval, routing and resolution."],
-          ["Hospital Compliance", "Country-scoped review of cases targeting their facilities."],
+          ["Hospital Compliance", "Reviews and resolves the cases filed against the facility the account is bound to."],
           ["System Auditor", "Read-only across the platform with masked patient identifiers."],
           ["Patient", "Own cases and community participation only; no console access."],
           ["Custom roles", "Start from a staff family, then grant only the capabilities that person needs."],
@@ -318,6 +342,16 @@ export default function AdminUsers() {
             </div>
             <div className="field"><label htmlFor="nu-country">Country scope</label><input id="nu-country" className="input" maxLength={2} placeholder="IN (blank = all India)" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value.toUpperCase() })} /></div>
             <div className="field full"><label htmlFor="nu-org">Organisation</label><input id="nu-org" className="input" value={form.organisation} onChange={(e) => setForm({ ...form, organisation: e.target.value })} /></div>
+            <div className="field full">
+              <label htmlFor="nu-facility">Facility</label>
+              <select id="nu-facility" className="select" value={form.facilityId} onChange={(e) => setForm({ ...form, facilityId: e.target.value })}>
+                <option value="">No facility — state-wide scope</option>
+                {facilities.map((f) => (
+                  <option key={f.id} value={f.id}>{f.name}{f.city ? ` · ${f.city}` : ""}</option>
+                ))}
+              </select>
+              <span className="hint">A facility-bound account only sees and resolves cases filed against that facility.</span>
+            </div>
             <div className="field full"><label htmlFor="nu-password">Temporary password</label><input id="nu-password" className="input" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="12+ characters, mixed case, digit, symbol" /></div>
           </div>
           <div className="modal-actions">

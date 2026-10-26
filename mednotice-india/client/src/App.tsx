@@ -15,12 +15,16 @@ import Portal from "./pages/Portal";
 import CaseDetail from "./pages/CaseDetail";
 import AdminOverview from "./pages/admin/Overview";
 import AdminCases from "./pages/admin/Cases";
+import AdminFacility from "./pages/admin/Facility";
 import AdminUsers from "./pages/admin/Users";
 import AdminAudit from "./pages/admin/Audit";
 import AdminAdapters from "./pages/admin/Adapters";
 import AdminCompliance from "./pages/admin/Compliance";
 import AdminDelivery from "./pages/admin/Delivery";
+import AdminDispatch from "./pages/admin/Dispatch";
+import AdminCommunications from "./pages/admin/Communications";
 import AdminCommunity from "./pages/admin/Community";
+import AdminDirectory from "./pages/admin/Directory";
 
 function Protected({ roles, permission, children }: { roles?: string[]; permission?: string; children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -66,6 +70,7 @@ export default function App() {
         <Route index element={<AdminOverview />} />
         <Route path="cases" element={<AdminCases />} />
         <Route path="cases/:id" element={<CaseDetail staff />} />
+        <Route path="facility" element={<AdminFacility />} />
         <Route
           path="users"
           element={
@@ -91,6 +96,22 @@ export default function App() {
           }
         />
         <Route
+          path="dispatch"
+          element={
+            <Protected roles={[...STAFF_ROLES]}>
+              <AdminDispatch />
+            </Protected>
+          }
+        />
+        <Route
+          path="communications"
+          element={
+            <Protected roles={[...STAFF_ROLES]}>
+              <AdminCommunications />
+            </Protected>
+          }
+        />
+        <Route
           path="community"
           element={
             <Protected permission="community.moderate">
@@ -99,6 +120,14 @@ export default function App() {
           }
         />
         <Route path="adapters" element={<AdminAdapters />} />
+        <Route
+          path="directory"
+          element={
+            <Protected roles={[...STAFF_ROLES]}>
+              <AdminDirectory />
+            </Protected>
+          }
+        />
         <Route path="compliance" element={<AdminCompliance />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Route>

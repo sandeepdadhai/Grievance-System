@@ -29,13 +29,85 @@ npm start            # Express serves the SPA and the API on :4100
 Tests and typecheck:
 
 ```bash
-npm test             # 52 unit + end-to-end tests (node:test via tsx)
+npm test             # 60 unit + end-to-end tests (node:test via tsx)
 npm run typecheck
 ```
 
 Node 22.5+ is required (the project uses the built-in `node:sqlite` module, so there is no native dependency).
 
 If you run this project beside the global one, keep the port split: global uses 3000/4000, India uses 3001/4100.
+
+---
+
+## Rebuilding the site and sharing it on one URL
+
+To publish a change, run one command from the project root:
+
+```bash
+npm run share
+```
+
+That command installs dependencies if `node_modules` is missing, builds the SPA and the API, restarts the API process, **reuses the tunnel that is already running**, then prints the public URL. Because the tunnel is left untouched, the link stays exactly the same across rebuilds. Sessions are stored in SQLite, so people who are signed in are not logged out by a rebuild.
+
+Runtime state and logs it manages (all inside the git-ignored `data/` and `artifacts/`):
+
+| Path | Meaning |
+| --- | --- |
+| `data/web.pid` / `data/web.log` | API process id and its output |
+| `data/tunnel.pid` / `data/tunnel.log` | tunnel process id and its output |
+| `data/tunnel-url.txt` | the current public URL |
+| `artifacts/share-link.txt` | human-readable link sheet (URL, build time, demo logins) |
+
+If you only touched React code you can run `npm run build` on its own — Express reads `client/dist` from disk — but `npm run share` is the safe default because a server-side change needs the restart.
+
+### Why the free `*.trycloudflare.com` link changes
+
+A Cloudflare *quick tunnel* is anonymous and tied to one running `cloudflared` process: the hostname exists only while that process lives, and every fresh start is assigned a new random hostname. Rebuilds do not change it (`npm run share` reuses the tunnel), but restarting the tunnel, the machine or the container does. Quick tunnels cannot be given a fixed hostname, so one permanent URL requires a named tunnel on a domain you control.
+
+### Custom domain: named Cloudflare tunnel
+
+Prerequisites: a domain whose DNS is managed by Cloudflare (the free plan is fine), and the app running on the machine that will host the tunnel (`localhost:4100`).
+
+1. **Create the tunnel.** Cloudflare dashboard → **Zero Trust** → **Networks** → **Tunnels** → **Create a tunnel** → connector **Cloudflared** → give it a name such as `mednotice-india`.
+2. **Copy the connector token** from the install page (the long `eyJ...` string). It is a secret: put it only in `.env`, never in Git or a chat message.
+3. **Add the public hostname** on the tunnel's **Public Hostname** tab:
+   - Subdomain: `grievances`
+   - Domain: `yourdomain.com`
+   - Path: leave empty
+   - Service: **HTTP** → `localhost:4100`
+   - Save. Cloudflare creates the DNS record for you; do not add a proxied `A`/`CNAME` record by hand.
+4. **Configure the server** in `.env` (already git-ignored):
+
+   ```bash
+   NODE_ENV=production
+   CLOUDFLARE_TUNNEL_TOKEN=<token from step 2>
+   PUBLIC_URL=https://grievances.yourdomain.com
+   ```
+
+   `PUBLIC_URL` must be the exact HTTPS hostname with no trailing slash; `scripts/share.sh` uses it to health-check the site and to print the link.
+5. **Start it:** `npm run share`. The script detects the token, runs `cloudflared tunnel run --token …`, waits until `https://grievances.yourdomain.com/api/health` returns `200`, and prints that URL. Every later rebuild keeps this URL.
+6. **Survive reboots (recommended on a real server):** install cloudflared as a service with the same token —
+
+   ```bash
+   sudo cloudflared service install <token from step 2>
+   ```
+
+   Once that service is up, `npm run share` sees the URL is already live and does not start a second connector.
+7. **Verify:**
+
+   ```bash
+   curl -fsS https://grievances.yourdomain.com/api/health
+   ```
+
+Notes:
+
+- With `NODE_ENV=production` the session cookie is `Secure`, which requires HTTPS — the tunnel provides it, so keep the production flag on when serving a real domain.
+- The app has no built-in account gate: anyone with the URL reaches the demo logins, including admin and authority accounts. Never point a public custom domain at a database you care about; use a throwaway data set and put Cloudflare Access (Zero Trust → **Access** → **Applications**) in front of the hostname if it is meant to stay private.
+- If your DNS cannot move to Cloudflare, host the same build on any machine or PaaS with a persistent volume for `data/` (SQLite, uploads and the master key live there). Only `npm run build && npm start` plus a reverse proxy is needed; the tunnel is optional.
+
+### Hosting it properly (no tunnel, one permanent URL)
+
+Step-by-step instructions for Render (recommended), Fly.io, Railway and a plain VPS — including persistent-disk layout, environment variables, custom domains, backups and moving the existing demo data — are in **[docs/hosting.md](docs/hosting.md)**.
 
 ---
 
@@ -70,8 +142,9 @@ Module boundaries live in `server/`:
 
 | Path | Responsibility |
 | --- | --- |
-| `server/config.ts` | India jurisdiction, health-authority registry, SLA matrix, key bootstrap |
+| `server/config.ts` | India jurisdiction, seeded health-authority catalogue, SLA matrix, key bootstrap |
 | `server/db.ts` | Schema, typed query helpers, transactions |
+| `server/registry.ts` | Runtime directory of health authorities and facilities (DB-backed, seeded from `config.ts`) |
 | `server/crypto.ts` | scrypt passwords, field/binary AES-256-GCM, PII masking |
 | `server/auth.ts` | Sessions, cookies, role guards, permission guards, India scoping |
 | `server/roles.ts` | Permission catalogue, built-in role defaults, custom role resolution |
@@ -82,7 +155,7 @@ Module boundaries live in `server/`:
 | `server/routing.ts` | Payload masking, transmission, adapter acknowledgement handling |
 | `server/notifications.ts` | Persisted queue, retry/backoff, email outbox, signed webhooks |
 | `server/audit.ts` | Append-only hash chain and verification |
-| `server/routes/` | Public, auth, cases, documents, admin, roles, community, assistant, webhook sink |
+| `server/routes/` | Public, auth, cases, documents, admin, roles, community, assistant, directory, webhook sink |
 
 ---
 
@@ -100,7 +173,9 @@ One national jurisdiction (`IN`) with six receiving authorities:
 | Health and Family Welfare Department, Tamil Nadu | Tamil Nadu | `IN-REST-TN` |
 
 Facilities are registered against an authority, so the state selection in the intake form determines the receiving
-department. Adding another state or Union Territory is a configuration and seed change — see *Adding a state*.
+department. The catalogue above is only the starting point: **admin console → Directory** lets a super administrator
+add, edit, retire and delete authorities and facilities at runtime, and every new entry becomes selectable by
+patients immediately — no code change or redeploy. See *Managing the directory*.
 
 Frameworks carried through intake, triage and the compliance workspace:
 
@@ -177,8 +252,10 @@ exponential backoff up to five attempts. Sandbox hosts are delivered to a local 
 India-wide metrics (open, P1, SLA breaches, verification queue, SLA compliance, 14-day trend, priority donut,
 state and category distributions), filterable case queue, full case file with findings and extracted fields,
 document approval/rejection, triage override with SLA recalculation, re-route, resolve/reopen, user and role
-management, community moderation, adapter registry with live payload preview, audit viewer with chain verification,
-delivery monitor, compliance workspace with NMC/facility registries and an Aadhaar/PAN masking playground.
+management, community moderation, the authority/facility directory, adapter registry with live payload preview,
+audit viewer with chain verification, the unified audit trail that merges every hash-chained decision with every
+message the platform exchanged, a delivery monitor, a communications log and a compliance workspace with
+NMC/facility registries and an Aadhaar/PAN masking playground.
 
 **7. Patient self-service**
 Self-registration (`POST /api/auth/signup`) creates a `PATIENT` account, records consent, opens a session immediately
@@ -187,8 +264,8 @@ symbol. Staff accounts remain administrator-provisioned.
 
 **8. Custom roles**
 Super administrators compose roles from a permission catalogue (case view/review/route/resolve, delivery, compliance,
-community moderation and audit). User, role and adapter administration stay reserved for Super Administrators and are
-not assignable to custom roles. A custom role is always derived from one staff capability family
+community moderation, audit, adapter configuration and directory management). User, role and adapter administration
+stay reserved for Super Administrators and are not assignable to custom roles. A custom role is always derived from one staff capability family
 (`MINISTRY_REVIEWER`, `HOSPITAL_COMPLIANCE` or `SYSTEM_AUDITOR`), so it can never exceed that family's data scope, and
 it receives only the permissions ticked. Role changes, assignments and deletions are audited; a role in use cannot be
 deleted, and built-in roles are immutable. Key endpoints: `GET/POST /api/admin/roles`, `PATCH/DELETE /api/admin/roles/:key`.
@@ -202,12 +279,56 @@ emergency language (108/112, Tele-MANAS 14416) and never gives medical advice. F
 signed-in patient's own case, or a case reference plus access code for guests; unauthorised lookups return no case data
 and are audited (`CHAT_CASE_LOOKUP`, `CHAT_CASE_LOOKUP_DENIED`).
 
-**10. Community**
+**10. Communications log**
+**Admin → Communications** is a single chronological stream of every message the platform exchanged with a health
+authority — email and webhook notices, case-bundle transmissions, department status pulls and inbound webhooks —
+shown with the masked payload that actually left the platform and the chain entry that proves it.
+
+**11. Unified audit trail**
+**Admin → Audit log** is one append-only ledger of both the hash-chained decisions and the communications above, so
+an auditor asking “what happened to this case?” can read the sequence of human decisions and the messages that carried
+them in one place. Messages stay inside the reader’s jurisdiction; the chain itself is global. Readers without the
+delivery permission see decisions only and never the message payloads.
+
+**12. Community**
 `/community` hosts posts and comments from patients and guests. Guests choose a display name; signed-in users post
 under their account name. Topics cover billing, denials of care, documents, feedback, accessibility, privacy and general
 experience; guidelines are enforced by length limits, plain-text storage and moderation. Moderators with the
 `community.moderate` permission can review every post and comment, edit content (with an audit note), hide or restore
 it, or remove it permanently. Hidden and removed content disappears from the public feed and detail pages.
+
+**11. Authority & facility directory**
+`/admin/directory` is the administration section for the health authorities and facilities that patients pick during
+intake. Two tabs — authorities and facilities — with search, an authority filter, live facility/case counts, and
+status badges.
+
+- **Add**: an authority needs a reference (`IN-SHA-GJ`), name, region, adapter, contact email and webhook endpoint;
+  a facility needs a reference (`FAC-IN-012`), name, owning authority, city and letterhead keywords used for
+  document-tamper detection.
+- **Edit**: every field except the reference can be changed in place; the new name is what patients see at intake.
+- **Delete**: blocked with a clear reason when facilities or cases still reference the entry — retire it instead
+  (`INACTIVE` for authorities, `CLOSED` for facilities) so historical cases keep their reference.
+- **Visibility rules**: only `ACTIVE` authorities and `VERIFIED` facilities are offered to patients; a retired
+  authority is rejected at submission, not just hidden.
+- **Guardrails**: the adapter must exist before it can be assigned, references are immutable, every create, edit and
+  delete is written to the hash-chained audit log, and the whole section is gated behind the `registry.manage`
+  capability (held by `SUPER_ADMIN`, grantable to a custom role).
+
+Changes take effect immediately: the intake form reads the registry, so a newly added authority and facility can be
+selected and used to file a grievance in the same session.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/admin/directory/authorities` | List every authority with facility and case counts |
+| `POST /api/admin/directory/authorities` | Create an authority (`registry.manage`) |
+| `PATCH /api/admin/directory/authorities/:id` | Edit an authority (`registry.manage`) |
+| `DELETE /api/admin/directory/authorities/:id` | Delete an unreferenced authority (`registry.manage`) |
+| `GET /api/admin/directory/facilities` | List every facility |
+| `POST /api/admin/directory/facilities` | Create a facility (`registry.manage`) |
+| `PATCH /api/admin/directory/facilities/:id` | Edit a facility (`registry.manage`) |
+| `DELETE /api/admin/directory/facilities/:id` | Delete an unreferenced facility (`registry.manage`) |
+| `GET /api/public/jurisdictions` | Intake list of active authorities (public) |
+| `GET /api/public/facilities?authority=…` | Intake list of verified facilities (public) |
 
 ---
 
@@ -233,7 +354,29 @@ process, KMS-backed keys and legal review under Indian law.
 
 ---
 
-## Adding a state
+## Managing the directory
+
+The catalogue in `server/config.ts` seeds the `authorities` table on first boot. After that the database is the
+source of truth, so the usual path for a new state or Union Territory is the admin console:
+
+1. Create the adapter first — **Adapters → New adapter** (protocol, endpoint, mapping). The directory refuses an
+   adapter code that does not exist.
+2. **Directory → New authority** — reference, name, region (state/UT), adapter, contact email (case notifications go
+   here) and the webhook endpoint that receives routed grievances.
+3. **Directory → New facility** — reference, name, owning authority, city and letterhead keywords.
+4. The new entries appear in the patient intake form straight away. Patients pick the authority, then a verified
+   facility under it, and the case is routed to that authority's adapter and mailbox.
+
+Retiring instead of deleting: set an authority to `INACTIVE` or a facility to `CLOSED` to withdraw it from intake
+while keeping existing cases intact. Entries that still have facilities or cases cannot be deleted — the API returns
+`409` with the reason and the admin console offers retirement.
+
+NMC licence registrations (`physician_licenses`, used by document verification) are still seeded from code, because
+they are a registry of individual practitioners rather than a directory entry.
+
+### Adding a state in code (optional)
+
+The runtime path above needs no code change. If you prefer to ship a state as code:
 
 1. Add an authority entry to `IN` in `server/config.ts` (name, state/UT region, adapter code, contact email, webhook).
 2. Seed facilities (`facilities`) and NMC registrations (`physician_licenses`) for that state.
@@ -261,6 +404,9 @@ process, KMS-backed keys and legal review under Indian law.
   posts and comments, and disappearance from the public feed.
 - Assistant: FAQ intents, emergency escalation, Hindi replies, authorised status lookup by access code and patient
   session, and no case data on an invalid access code.
+- Directory: a new authority and facility are created by an administrator, become selectable by patients, accept a
+  grievance that routes successfully, and disappear from intake when retired; deletion is blocked while cases or
+  facilities reference the entry, and every change is written to the audit chain.
 
 ## Known limitations (by design for this build)
 

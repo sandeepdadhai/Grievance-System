@@ -16,6 +16,7 @@ export const PERMISSIONS = [
   { key: "community.moderate", label: "Moderate community", group: "Community", description: "Review, edit, hide and remove community posts and comments." },
   { key: "audit.view", label: "Audit log", group: "Governance", description: "Read the tamper-evident audit chain." },
   { key: "adapters.manage", label: "Manage adapters", group: "Governance", description: "Configure authority adapters and credentials." },
+  { key: "registry.manage", label: "Manage directory", group: "Governance", description: "Add, edit and retire the health authorities and facilities offered to patients." },
   { key: "users.manage", label: "Manage users & roles", group: "Governance", description: "Create accounts and compose custom roles." },
 ] as const;
 

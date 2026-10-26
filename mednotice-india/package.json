@@ -13,6 +13,7 @@
     "dev:web": "vite --config client/vite.config.ts",
     "build": "vite build --config client/vite.config.ts && tsc -p tsconfig.server.json",
     "start": "node dist/server/index.js",
+    "share": "bash scripts/share.sh",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "seed": "tsx server/seed-cli.ts"

@@ -1,8 +1,27 @@
 node_modules/
 dist/
 client/dist/
+.bin/
 data/
+artifacts/
+
+# secrets and local runtime config
 .env
+*.pem
 *.log
 .DS_Store
-artifacts/
+
+# terraform local state / cache (never commit these)
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform.tfstate.lock.info
+tfplan
+*.tfplan
+infra/tfplan
+
+# keep the public half of the deploy key, it is not a secret
+!mednotice-aws.pub
+!terraform-key.pem.pub

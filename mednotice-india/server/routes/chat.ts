@@ -5,7 +5,7 @@ import { sha256Hex, timingSafeEqualStr } from "../crypto.js";
 import { audit } from "../audit.js";
 import { asyncHandler, createRateLimiter, meta, parseBody } from "../http.js";
 import { CASE_ID_PATTERN, classify, describeCase, faqReply, isHindi } from "../chat.js";
-import { findAuthority } from "../config.js";
+import { findAuthority } from "../registry.js";
 import type { CaseRow } from "../models.js";
 
 /**

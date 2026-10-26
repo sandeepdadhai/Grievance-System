@@ -114,7 +114,7 @@ export function Modal({ title, sub, onClose, children }: { title: string; sub?: 
   );
 }
 
-type IconName = "grid" | "folder" | "users" | "shield" | "plug" | "send" | "activity" | "logout" | "arrow" | "upload" | "check" | "x" | "alert" | "search" | "chevron" | "lock" | "file" | "plus" | "refresh" | "clipboard" | "globe" | "message";
+type IconName = "grid" | "folder" | "users" | "shield" | "plug" | "send" | "activity" | "logout" | "arrow" | "upload" | "check" | "x" | "alert" | "search" | "chevron" | "lock" | "file" | "plus" | "refresh" | "clipboard" | "globe" | "message" | "building" | "truck" | "mail";
 
 export function Icon({ name, size = 17 }: { name: IconName; size?: number }) {
   const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -163,6 +163,32 @@ export function Icon({ name, size = 17 }: { name: IconName; size?: number }) {
       return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18Z" /></svg>;
     case "message":
       return <svg {...common}><path d="M21 12a8 8 0 0 1-8 8H8l-4 3v-5.4A8 8 0 0 1 9 4h4a8 8 0 0 1 8 8Z" /><path d="M9 11h6M9 14.5h4" /></svg>;
+    case "building":
+      return (
+        <svg {...common}>
+          <path d="M3 21h18" />
+          <path d="M5 21V6.5a1 1 0 0 1 .62-.92l6-2.2a1 1 0 0 1 1.38.92V21" />
+          <path d="M13 21V9.2l6 2.3V21" />
+          <path d="M9 10.5h.01M9 14.5h.01M9 18h.01M16 14h.01M16 17.5h.01" />
+        </svg>
+      );
+    case "truck":
+      return (
+        <svg {...common}>
+          <path d="M3 16V6h11v10" />
+          <path d="M14 9h4l3 3.5V16h-7" />
+          <circle cx="7" cy="17.5" r="2" />
+          <circle cx="17" cy="17.5" r="2" />
+          <path d="M9 17.5h6" />
+        </svg>
+      );
+    case "mail":
+      return (
+        <svg {...common}>
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <path d="m3.5 7 8.5 6 8.5-6" />
+        </svg>
+      );
     default:
       return null;
   }

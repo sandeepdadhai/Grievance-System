@@ -1,7 +1,8 @@
 import { all, count, get, nowIso, run, tx } from "./db.js";
 import { audit } from "./audit.js";
 import { encryptField, hashPassword, maskEmail, maskName, randomCode, sha256Hex } from "./crypto.js";
-import { findAuthority, findJurisdiction } from "./config.js";
+import { findJurisdiction } from "./config.js";
+import { findAuthority, getFacility, seedAuthorities } from "./registry.js";
 import { triage } from "./triage.js";
 import { seedRoles } from "./roles.js";
 import type { Finding } from "./verification/types.js";
@@ -24,6 +25,46 @@ const USERS: SeedUser[] = [
   { id: "USR-PATIENT", email: "patient@demo.in", name: "Meera Sharma", password: "Patient!2345", role: "PATIENT", country: "IN", organisation: null },
   { id: "USR-PATIENT-HI", email: "rahul.verma@demo.in", name: "Rahul Verma", password: "Patient!2345", role: "PATIENT", country: "IN", organisation: null },
 ];
+
+type FacilityAccount = {
+  id: string;
+  email: string;
+  name: string;
+  password: string;
+  facilityId: string;
+};
+
+/**
+ * Facility-bound compliance logins. Each account is tied to exactly one
+ * facility: it only sees the cases filed against that facility and can verify
+ * the uploaded evidence and resolve those cases. Seeded idempotently so
+ * existing databases pick the accounts up on the next boot.
+ */
+const FACILITY_ACCOUNTS: FacilityAccount[] = [
+  { id: "USR-FAC-AIIMS", email: "facility.aiims@mednotice.in", name: "Priya Nair", password: "Facility!2345", facilityId: "FAC-IN-001" },
+  { id: "USR-FAC-KEM", email: "facility.kem@mednotice.in", name: "Amit Kulkarni", password: "Facility!2345", facilityId: "FAC-IN-003" },
+  { id: "USR-FAC-APOLLO", email: "facility.apollo@mednotice.in", name: "Divya Raman", password: "Facility!2345", facilityId: "FAC-IN-005" },
+];
+
+export async function seedFacilityAccounts(): Promise<void> {
+  for (const account of FACILITY_ACCOUNTS) {
+    if (get("SELECT id FROM users WHERE email = ? OR id = ?", account.email, account.id)) continue;
+    const facility = getFacility(account.facilityId);
+    if (!facility) continue;
+    run(
+      `INSERT INTO users (id, email, name, password_hash, role, country, organisation, facility_id, active, mfa_enabled, created_at)
+       VALUES (?, ?, ?, ?, 'HOSPITAL_COMPLIANCE', ?, ?, ?, 1, 0, ?)`,
+      account.id,
+      account.email,
+      account.name,
+      await hashPassword(account.password),
+      facility.country,
+      facility.name,
+      facility.id,
+      nowIso(),
+    );
+  }
+}
 
 const FACILITIES: Array<{ id: string; name: string; authorityId: string; country: string; city: string; keywords: string[]; status?: string }> = [
   { id: "FAC-IN-001", name: "All India Institute of Medical Sciences", authorityId: "IN-MOHFW", country: "IN", city: "New Delhi", keywords: ["All India Institute of Medical Sciences", "AIIMS", "Ansari Nagar"] },
@@ -51,14 +92,22 @@ const LICENSES: Array<{ no: string; name: string; jurisdiction: string; status: 
   { no: "MH-20219", name: "Sneha Patil", jurisdiction: "IN", status: "ACTIVE", expires: "2027-11-30", facility: "FAC-IN-003" },
 ];
 
-const ADAPTERS: Array<{ code: string; name: string; country: string; kind: string; endpoint: string; mapping?: Record<string, unknown> }> = [
-  { code: "IN-FHIR", name: "MoHFW / ABDM FHIR R4 ingestion", country: "IN", kind: "FHIR", endpoint: "https://sandbox.mednotice.in/in/fhir/R4" },
+const ADAPTERS: Array<{ code: string; name: string; country: string; kind: string; endpoint: string; statusEndpoint?: string; mapping?: Record<string, unknown> }> = [
+  {
+    code: "IN-FHIR",
+    name: "MoHFW / ABDM FHIR R4 ingestion",
+    country: "IN",
+    kind: "FHIR",
+    endpoint: "https://sandbox.mednotice.in/in/fhir/R4",
+    statusEndpoint: "https://sandbox.mednotice.in/in/fhir/R4/Task/{{caseId}}",
+  },
   {
     code: "IN-REST",
     name: "National Health Authority grievance API",
     country: "IN",
     kind: "REST",
     endpoint: "https://sandbox.mednotice.in/in/nha/grievance",
+    statusEndpoint: "https://sandbox.mednotice.in/in/nha/grievance/{{caseId}}/status",
     mapping: {
       envelope: {
         grievance_id: "{{caseId}}",
@@ -80,6 +129,7 @@ const ADAPTERS: Array<{ code: string; name: string; country: string; kind: strin
     country: "IN",
     kind: "REST",
     endpoint: "https://sandbox.mednotice.in/in/dl/health/complaints",
+    statusEndpoint: "https://sandbox.mednotice.in/in/dl/health/complaints/{{caseId}}/status",
     mapping: {
       envelope: {
         complaint_reference: "{{caseId}}",
@@ -102,6 +152,7 @@ const ADAPTERS: Array<{ code: string; name: string; country: string; kind: strin
     country: "IN",
     kind: "HL7v2",
     endpoint: "https://sandbox.mednotice.in/in/mh/hl7/inbound",
+    statusEndpoint: "https://sandbox.mednotice.in/in/mh/hl7/status/{{caseId}}",
   },
   {
     code: "IN-REST-KA",
@@ -109,6 +160,7 @@ const ADAPTERS: Array<{ code: string; name: string; country: string; kind: strin
     country: "IN",
     kind: "REST",
     endpoint: "https://sandbox.mednotice.in/in/ka/health/complaints",
+    statusEndpoint: "https://sandbox.mednotice.in/in/ka/health/complaints/{{caseId}}/status",
     mapping: {
       envelope: {
         case_id: "{{caseId}}",
@@ -131,6 +183,7 @@ const ADAPTERS: Array<{ code: string; name: string; country: string; kind: strin
     country: "IN",
     kind: "REST",
     endpoint: "https://sandbox.mednotice.in/in/tn/health/complaints",
+    statusEndpoint: "https://sandbox.mednotice.in/in/tn/health/complaints/{{caseId}}/status",
     mapping: {
       envelope: {
         reference: "{{caseId}}",
@@ -453,6 +506,8 @@ function hoursFromNow(hours: number): string {
 
 export async function seed(): Promise<void> {
   seedRoles();
+  seedAuthorities();
+  await seedFacilityAccounts();
   if (count("SELECT COUNT(*) AS n FROM users") > 0) {
     seedCommunity();
     return;
@@ -499,13 +554,14 @@ export async function seed(): Promise<void> {
 
   for (const a of ADAPTERS) {
     run(
-      `INSERT INTO adapters (code, name, country, kind, endpoint, auth_type, auth_config_enc, mapping_json, enabled, simulate, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'NONE', NULL, ?, 1, 1, ?, ?)`,
+      `INSERT INTO adapters (code, name, country, kind, endpoint, status_endpoint, auth_type, auth_config_enc, mapping_json, enabled, simulate, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'NONE', NULL, ?, 1, 1, ?, ?)`,
       a.code,
       a.name,
       a.country,
       a.kind,
       a.endpoint,
+      a.statusEndpoint ?? null,
       JSON.stringify(a.mapping ?? {}),
       nowIso(),
       nowIso(),
@@ -629,23 +685,26 @@ export async function seed(): Promise<void> {
       const adapter = findAuthority(c.authorityId)?.authority.adapter ?? "IN-FHIR";
       const transmissionId = `TRX-${randomCode(8)}`;
       const txAt = new Date(new Date(createdAt).getTime() + 90_000).toISOString();
+      const ackId = `sim-${randomCode(8)}`;
       run(
-        `INSERT INTO transmissions (id, case_id, adapter_code, status, request_json, response_json, http_status, latency_ms, attempts, created_at)
-         VALUES (?, ?, ?, 'DELIVERED', ?, ?, 201, 142, 1, ?)`,
+        `INSERT INTO transmissions (id, case_id, adapter_code, status, request_json, response_json, http_status, latency_ms, attempts, created_at, reference)
+         VALUES (?, ?, ?, 'DELIVERED', ?, ?, 201, 142, 1, ?, ?)`,
         transmissionId,
         caseId,
         adapter,
         JSON.stringify({ caseId, priority, masked: true, adapter }),
-        JSON.stringify({ simulated: true, ackId: `sim-${randomCode(8)}`, message: "Accepted by simulated authority endpoint" }),
+        JSON.stringify({ simulated: true, ackId, message: "Accepted by simulated authority endpoint" }),
         txAt,
+        ackId,
       );
+      run("UPDATE cases SET authority_reference = ? WHERE id = ?", ackId, caseId);
       audit({
         ts: txAt,
         actor: { id: null, role: "SYSTEM" },
         action: "CASE_ROUTED",
         entityType: "case",
         entityId: caseId,
-        details: { adapter, simulated: true, httpStatus: 201, latencyMs: 142 },
+        details: { transmissionId, adapter, simulated: true, httpStatus: 201, latencyMs: 142 },
       });
 
       const subject = `[${priority}] ${caseId} · ${t.category} · ${facility.name}`;
@@ -654,10 +713,11 @@ export async function seed(): Promise<void> {
         ["EMAIL", findAuthority(c.authorityId)?.authority.contactEmail ?? "grievance@example.gov.in"],
         ["WEBHOOK", findAuthority(c.authorityId)?.authority.webhook ?? "https://sandbox.mednotice.in/hook"],
       ] as const) {
+        const notificationId = `NTF-${randomCode(9)}`;
         run(
           `INSERT INTO notifications (id, case_id, channel, target, subject, body, status, attempts, next_attempt_at, created_at, sent_at)
            VALUES (?, ?, ?, ?, ?, ?, 'SENT', 1, ?, ?, ?)`,
-          `NTF-${randomCode(9)}`,
+          notificationId,
           caseId,
           channel,
           target,
@@ -667,6 +727,14 @@ export async function seed(): Promise<void> {
           txAt,
           txAt,
         );
+        audit({
+          ts: txAt,
+          actor: { id: null, role: "SYSTEM" },
+          action: "NOTIFICATION_SENT",
+          entityType: "case",
+          entityId: caseId,
+          details: { notificationId, channel, target, transmissionId, simulated: true },
+        });
       }
     }
 

@@ -7,6 +7,8 @@ const DEMOS = [
   { email: "admin@mednotice.in", password: "Admin!2345", label: "Super Administrator", org: "MedNotice India" },
   { email: "reviewer@mohfw.gov.in", password: "Review!2345", label: "Ministry Reviewer", org: "India · MoHFW" },
   { email: "compliance@aiims.edu", password: "Comply!2345", label: "Hospital Compliance", org: "India · AIIMS" },
+  { email: "facility.aiims@mednotice.in", password: "Facility!2345", label: "Facility officer", org: "AIIMS New Delhi" },
+  { email: "facility.kem@mednotice.in", password: "Facility!2345", label: "Facility officer", org: "KEM Mumbai" },
   { email: "auditor@mednotice.in", password: "Audit!2345", label: "System Auditor", org: "Read-only" },
   { email: "patient@demo.in", password: "Patient!2345", label: "Patient", org: "India · demo patient" },
 ];

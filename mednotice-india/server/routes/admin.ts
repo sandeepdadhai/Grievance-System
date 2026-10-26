@@ -1,14 +1,17 @@
 import { Router } from "express";
 import { z } from "zod";
 import { all, count, get, nowIso, run } from "../db.js";
-import { JURISDICTIONS, findAuthority, findJurisdiction, type Priority } from "../config.js";
+import { JURISDICTIONS, findJurisdiction, type Priority } from "../config.js";
 import { encryptField, hashPassword, maskPayload, randomCode } from "../crypto.js";
 import { audit, listAudit, verifyAuditChain } from "../audit.js";
-import { assertCaseAccess, scopeCountry } from "../access.js";
+import { listAuditTrail, trailStatuses } from "../audit-trail.js";
+import { COMMUNICATION_KINDS } from "../communications.js";
+import { assertCaseAccess, scopeCountry, scopeFacility } from "../access.js";
+import { getFacility } from "../registry.js";
 import { asyncHandler, createRateLimiter, HttpError, meta, parseBody } from "../http.js";
 import { requireAuth, requirePermission, requireRole, REVIEWER_ROLES, STAFF_ROLES } from "../auth.js";
 import { resolveRole, roleExists } from "../roles.js";
-import { caseToDto, type CaseRow, type DocumentRow, type Role, type UserRow } from "../models.js";
+import { caseToDto, documentToDto, type CaseRow, type DocumentRow, type Role, type UserRow } from "../models.js";
 import { resolveAdapter, implementationFor } from "../adapters/index.js";
 import { buildCasePayload, transmitCase } from "../routing.js";
 import { processPendingNotifications, requeueNotification } from "../notifications.js";
@@ -36,8 +39,18 @@ adminRouter.get(
   "/overview",
   asyncHandler((req, res) => {
     const scope = scopeCountry(req);
-    const scoped = scope ? " AND country = ?" : "";
-    const p = scope ? [scope] : [];
+    const facilityScope = scopeFacility(req);
+    const scopeParts: string[] = [];
+    const p: unknown[] = [];
+    if (scope) {
+      scopeParts.push("country = ?");
+      p.push(scope);
+    }
+    if (facilityScope) {
+      scopeParts.push("facility_id = ?");
+      p.push(facilityScope);
+    }
+    const scoped = scopeParts.length ? ` AND ${scopeParts.join(" AND ")}` : "";
     const now = nowIso();
 
     const totals =
@@ -152,11 +165,16 @@ adminRouter.get(
   "/cases",
   asyncHandler((req, res) => {
     const scope = scopeCountry(req);
+    const facilityScope = scopeFacility(req);
     const where: string[] = [];
     const params: unknown[] = [];
     if (scope) {
       where.push("c.country = ?");
       params.push(scope);
+    }
+    if (facilityScope) {
+      where.push("c.facility_id = ?");
+      params.push(facilityScope);
     }
     const q = str(req.query.q);
     if (q) {
@@ -171,6 +189,7 @@ adminRouter.get(
       ["verification", "c.verification_status"],
       ["assigned", "c.assigned_to"],
       ["authority", "c.authority_id"],
+      ["facility", "c.facility_id"],
     ] as const) {
       const value = str(req.query[key]);
       if (value) {
@@ -210,6 +229,76 @@ adminRouter.get(
         documentCount: Number(row.doc_count),
         patientName: row.patient_name_masked,
         patientEmail: row.patient_email_masked,
+      })),
+    });
+  }),
+);
+
+/* -------------------------------- facility ------------------------------- */
+
+/**
+ * Facility workspace for accounts bound to one facility: every case filed
+ * against that facility, ordered so the work that still needs a decision comes
+ * first, with the documents awaiting manual verification attached.
+ */
+adminRouter.get(
+  "/facility",
+  asyncHandler((req, res) => {
+    const facilityId = scopeFacility(req);
+    if (!facilityId) {
+      throw new HttpError(400, "This account is not bound to a facility. Ask a super administrator to assign one.");
+    }
+    const facility = getFacility(facilityId);
+    if (!facility) throw new HttpError(404, "Facility not found");
+
+    const totals =
+      get<Record<string, number>>(
+        `SELECT COUNT(*) AS total,
+                SUM(CASE WHEN status NOT IN ('RESOLVED','REJECTED') THEN 1 ELSE 0 END) AS open,
+                SUM(CASE WHEN verification_status = 'PENDING_MANUAL_REVIEW' THEN 1 ELSE 0 END) AS awaitingVerification,
+                SUM(CASE WHEN status = 'RESOLVED' THEN 1 ELSE 0 END) AS resolved,
+                SUM(CASE WHEN sla_due_at < ? AND status NOT IN ('RESOLVED','REJECTED') THEN 1 ELSE 0 END) AS overdue
+         FROM cases WHERE facility_id = ?`,
+        nowIso(),
+        facilityId,
+      ) ?? {};
+
+    const rows = all<CaseRow & { doc_count: number; pending_docs: number }>(
+      `SELECT c.*,
+              (SELECT COUNT(*) FROM documents d WHERE d.case_id = c.id) AS doc_count,
+              (SELECT COUNT(*) FROM documents d WHERE d.case_id = c.id AND d.verification_status = 'PENDING_MANUAL_REVIEW') AS pending_docs
+       FROM cases c WHERE c.facility_id = ?
+       ORDER BY CASE c.status
+                  WHEN 'PENDING_REVIEW' THEN 0
+                  WHEN 'SUBMITTED' THEN 1
+                  WHEN 'ROUTE_FAILED' THEN 2
+                  WHEN 'UNDER_REVIEW' THEN 3
+                  WHEN 'ROUTED' THEN 4
+                  ELSE 5 END,
+                c.sla_due_at ASC
+       LIMIT 200`,
+      facilityId,
+    );
+
+    const docRows = all<DocumentRow>(
+      "SELECT * FROM documents WHERE case_id IN (SELECT id FROM cases WHERE facility_id = ?) ORDER BY uploaded_at",
+      facilityId,
+    );
+
+    res.json({
+      facility,
+      counts: {
+        total: Number(totals.total ?? 0),
+        open: Number(totals.open ?? 0),
+        awaitingVerification: Number(totals.awaitingVerification ?? 0),
+        resolved: Number(totals.resolved ?? 0),
+        overdue: Number(totals.overdue ?? 0),
+      },
+      cases: rows.map((row) => ({
+        ...caseToDto(row, { role: req.user!.baseRole, id: req.user!.id }),
+        documentCount: Number(row.doc_count),
+        pendingDocuments: Number(row.pending_docs),
+        documents: docRows.filter((d) => d.case_id === row.id).map(documentToDto),
       })),
     });
   }),
@@ -398,7 +487,7 @@ adminRouter.get(
   requireRole("SUPER_ADMIN"),
   asyncHandler((_req, res) => {
     const users = all(
-      "SELECT id, email, name, role, country, organisation, active, mfa_enabled, last_login_at, created_at FROM users ORDER BY created_at",
+      "SELECT id, email, name, role, country, organisation, facility_id, active, mfa_enabled, last_login_at, created_at FROM users ORDER BY created_at",
     );
     res.json({ users });
   }),
@@ -424,13 +513,16 @@ adminRouter.post(
         role: roleKeySchema,
         country: z.string().trim().length(2).optional().or(z.literal("")),
         organisation: z.string().trim().max(160).optional().or(z.literal("")),
+        /** Binds the account to one facility; blank keeps the state-wide scope. */
+        facilityId: z.string().trim().min(2).max(60).optional().or(z.literal("")),
       }),
       req.body,
     );
     if (get("SELECT id FROM users WHERE email = ?", body.email)) throw new HttpError(409, "A user with that email already exists");
+    if (body.facilityId && !getFacility(body.facilityId)) throw new HttpError(400, "Unknown facility");
     const id = `USR-${randomCode(8)}`;
     run(
-      "INSERT INTO users (id, email, name, password_hash, role, country, organisation, active, mfa_enabled, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0, ?)",
+      "INSERT INTO users (id, email, name, password_hash, role, country, organisation, facility_id, active, mfa_enabled, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?)",
       id,
       body.email,
       body.name,
@@ -438,6 +530,7 @@ adminRouter.post(
       body.role,
       body.country || null,
       body.organisation || null,
+      body.facilityId || null,
       nowIso(),
     );
     audit({
@@ -446,9 +539,20 @@ adminRouter.post(
       entityType: "user",
       entityId: id,
       ...meta(req),
-      details: { email: body.email, role: body.role, country: body.country || null },
+      details: { email: body.email, role: body.role, country: body.country || null, facilityId: body.facilityId || null },
     });
-    res.status(201).json({ user: { id, email: body.email, name: body.name, role: body.role, country: body.country || null, organisation: body.organisation || null, active: 1 } });
+    res.status(201).json({
+      user: {
+        id,
+        email: body.email,
+        name: body.name,
+        role: body.role,
+        country: body.country || null,
+        organisation: body.organisation || null,
+        facility_id: body.facilityId || null,
+        active: 1,
+      },
+    });
   }),
 );
 
@@ -463,6 +567,7 @@ adminRouter.patch(
         active: boolish.optional(),
         country: z.string().trim().length(2).nullable().optional(),
         organisation: z.string().trim().max(160).nullable().optional(),
+        facilityId: z.string().trim().min(2).max(60).nullable().optional(),
       }),
       req.body,
     );
@@ -475,13 +580,15 @@ adminRouter.patch(
       const admins = count("SELECT COUNT(*) AS n FROM users WHERE role = 'SUPER_ADMIN' AND active = 1");
       if (admins <= 1) throw new HttpError(400, "At least one active super administrator must remain");
     }
+    if (body.facilityId && !getFacility(body.facilityId)) throw new HttpError(400, "Unknown facility");
     run(
-      "UPDATE users SET name = ?, role = ?, active = ?, country = ?, organisation = ? WHERE id = ?",
+      "UPDATE users SET name = ?, role = ?, active = ?, country = ?, organisation = ?, facility_id = ? WHERE id = ?",
       body.name ?? user.name,
       body.role ?? user.role,
       body.active === undefined ? user.active : body.active ? 1 : 0,
       body.country === undefined ? user.country : body.country,
       body.organisation === undefined ? user.organisation : body.organisation,
+      body.facilityId === undefined ? user.facility_id : body.facilityId,
       user.id,
     );
     if (body.active === false) run("DELETE FROM sessions WHERE user_id = ?", user.id);
@@ -553,6 +660,56 @@ adminRouter.get(
   }),
 );
 
+/* -------------------------------- trail ---------------------------------- */
+
+/**
+ * The unified audit trail: every decision in the hash chain and every message
+ * exchanged with a health authority, in one chronological log.
+ */
+adminRouter.get(
+  "/audit/trail",
+  requirePermission("audit.view"),
+  asyncHandler((req, res) => {
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit ?? 50) || 50));
+    const offset = Math.max(0, Number(req.query.offset ?? 0) || 0);
+    const user = req.user!;
+
+    // Message payloads stay behind the delivery-desk permission, even for a
+    // reader who may read the chain.
+    const canViewMessages = user.baseRole === "SUPER_ADMIN" || user.permissions.includes("delivery.view");
+    const requested = str(req.query.source)?.toLowerCase();
+    const source = requested === "audit" || requested === "communications" ? requested : "all";
+
+    const result = listAuditTrail(
+      {
+        source: canViewMessages ? source : "audit",
+        kind: str(req.query.kind)?.toUpperCase(),
+        status: str(req.query.status)?.toUpperCase(),
+        action: str(req.query.action),
+        caseId: str(req.query.caseId)?.toUpperCase(),
+        q: str(req.query.q),
+        from: str(req.query.from),
+        to: str(req.query.to),
+        country: scopeCountry(req),
+      },
+      limit,
+      offset,
+    );
+
+    res.json({
+      ...result,
+      limit,
+      offset,
+      chain: verifyAuditChain(),
+      kinds: COMMUNICATION_KINDS,
+      statuses: trailStatuses(),
+      canViewMessages,
+      scope: scopeCountry(req) ?? "INDIA",
+      generatedAt: nowIso(),
+    });
+  }),
+);
+
 /* -------------------------------- adapters ------------------------------- */
 
 adminRouter.get(
@@ -567,6 +724,7 @@ adminRouter.get(
         country: r.country,
         kind: r.kind,
         endpoint: r.endpoint,
+        statusEndpoint: r.status_endpoint ?? null,
         authType: r.auth_type,
         mapping: JSON.parse(String(r.mapping_json || "{}")),
         enabled: Boolean(r.enabled),
@@ -586,6 +744,7 @@ const adapterSchema = z.object({
   country: z.string().trim().length(2).transform((c) => c.toUpperCase()),
   kind: z.enum(["FHIR", "HL7v2", "REST", "SOAP"]),
   endpoint: z.string().trim().url().max(500),
+  statusEndpoint: z.string().trim().url().max(500).optional(),
   mapping: z.record(z.unknown()).optional().default({}),
   simulate: boolish.optional().default(true),
   enabled: boolish.optional().default(true),
@@ -601,16 +760,18 @@ adminRouter.post(
     if (!findJurisdiction(body.country)) throw new HttpError(400, "Country is not configured");
     const exists = get("SELECT code FROM adapters WHERE code = ?", body.code);
     run(
-      `INSERT INTO adapters (code, name, country, kind, endpoint, auth_type, auth_config_enc, mapping_json, enabled, simulate, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO adapters (code, name, country, kind, endpoint, status_endpoint, auth_type, auth_config_enc, mapping_json, enabled, simulate, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(code) DO UPDATE SET name = excluded.name, country = excluded.country, kind = excluded.kind,
-         endpoint = excluded.endpoint, auth_type = excluded.auth_type, auth_config_enc = excluded.auth_config_enc,
-         mapping_json = excluded.mapping_json, enabled = excluded.enabled, simulate = excluded.simulate, updated_at = excluded.updated_at`,
+         endpoint = excluded.endpoint, status_endpoint = excluded.status_endpoint, auth_type = excluded.auth_type,
+         auth_config_enc = excluded.auth_config_enc, mapping_json = excluded.mapping_json, enabled = excluded.enabled,
+         simulate = excluded.simulate, updated_at = excluded.updated_at`,
       body.code,
       body.name,
       body.country,
       body.kind,
       body.endpoint,
+      body.statusEndpoint ?? null,
       body.authType,
       body.authConfig ? encryptField(JSON.stringify(body.authConfig)) : null,
       JSON.stringify(body.mapping ?? {}),
@@ -642,15 +803,17 @@ adminRouter.patch(
         enabled: boolish.optional(),
         simulate: boolish.optional(),
         endpoint: z.string().trim().url().max(500).optional(),
+        statusEndpoint: z.string().trim().url().max(500).nullable().optional(),
         mapping: z.record(z.unknown()).optional(),
       }),
       req.body,
     );
     run(
-      "UPDATE adapters SET enabled = ?, simulate = ?, endpoint = ?, mapping_json = ?, updated_at = ? WHERE code = ?",
+      "UPDATE adapters SET enabled = ?, simulate = ?, endpoint = ?, status_endpoint = ?, mapping_json = ?, updated_at = ? WHERE code = ?",
       body.enabled === undefined ? row.enabled : body.enabled ? 1 : 0,
       body.simulate === undefined ? row.simulate : body.simulate ? 1 : 0,
       body.endpoint ?? row.endpoint,
+      body.statusEndpoint === undefined ? row.status_endpoint : body.statusEndpoint,
       body.mapping ? JSON.stringify(body.mapping) : row.mapping_json,
       nowIso(),
       req.params.code,
@@ -741,49 +904,6 @@ adminRouter.get("/webhooks", asyncHandler((_req, res) => {
 }));
 
 /* -------------------------------- registry ------------------------------- */
-
-adminRouter.get("/facilities", asyncHandler((_req, res) => {
-  const rows = all("SELECT * FROM facilities ORDER BY country, name");
-  res.json({ facilities: rows.map((r) => ({ ...r, letterheadKeywords: JSON.parse(String(r.letterhead_keywords)) })) });
-}));
-
-adminRouter.post(
-  "/facilities",
-  requireRole("SUPER_ADMIN"),
-  asyncHandler((req, res) => {
-    const body = parseBody(
-      z.object({
-        id: z.string().trim().min(3).max(40),
-        name: z.string().trim().min(3).max(160),
-        authorityId: z.string().trim().min(3).max(60),
-        city: z.string().trim().max(120).optional().default(""),
-        letterheadKeywords: z.array(z.string().max(120)).max(20).optional().default([]),
-      }),
-      req.body,
-    );
-    const authority = findAuthority(body.authorityId);
-    if (!authority) throw new HttpError(400, "Unknown health authority");
-    if (get("SELECT id FROM facilities WHERE id = ?", body.id)) throw new HttpError(409, "Facility ID already exists");
-    run(
-      "INSERT INTO facilities (id, name, authority_id, country, city, letterhead_keywords, status) VALUES (?, ?, ?, ?, ?, ?, 'VERIFIED')",
-      body.id,
-      body.name,
-      body.authorityId,
-      authority.jurisdiction.code,
-      body.city,
-      JSON.stringify(body.letterheadKeywords),
-    );
-    audit({
-      actor: { id: req.user!.id, role: req.user!.role },
-      action: "FACILITY_CREATED",
-      entityType: "facility",
-      entityId: body.id,
-      ...meta(req),
-      details: { name: body.name, authority: body.authorityId },
-    });
-    res.status(201).json({ ok: true });
-  }),
-);
 
 adminRouter.get("/physicians", asyncHandler((_req, res) => {
   res.json({ physicians: all("SELECT * FROM physician_licenses ORDER BY jurisdiction, full_name") });

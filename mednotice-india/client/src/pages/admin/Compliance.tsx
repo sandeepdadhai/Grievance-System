@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, formatDate } from "../../api";
 import { useAuth } from "../../auth";
-import type { Jurisdiction } from "../../types";
+import type { FacilityDto, Jurisdiction } from "../../types";
 import { Alert, Badge, Card, CardHead, Icon, Spinner } from "../../components/ui";
 
-type FacilityRow = { id: string; name: string; country: string; city: string | null; authority_id: string; status: string; letterheadKeywords: string[] };
 type PhysicianRow = { license_no: string; full_name: string; jurisdiction: string; status: string; expires_at: string | null; facility_id: string | null };
 
 const SAMPLE = `Complainant: Meera Sharma, meera.sharma@example.in, +91 98100 12345.
@@ -30,7 +30,7 @@ export default function AdminCompliance() {
   const isAdmin = user?.role === "SUPER_ADMIN";
   const canAudit = isAdmin || user?.role === "SYSTEM_AUDITOR";
   const [jurisdictions, setJurisdictions] = useState<Jurisdiction[]>([]);
-  const [facilities, setFacilities] = useState<FacilityRow[]>([]);
+  const [facilities, setFacilities] = useState<FacilityDto[]>([]);
   const [physicians, setPhysicians] = useState<PhysicianRow[]>([]);
   const [chain, setChain] = useState<{ valid: boolean; checked: number; brokenAt: number | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +41,7 @@ export default function AdminCompliance() {
     try {
       const [j, f, p] = await Promise.all([
         api.get<{ jurisdictions: Jurisdiction[] }>("/api/public/jurisdictions"),
-        api.get<{ facilities: FacilityRow[] }>("/api/admin/facilities"),
+        api.get<{ facilities: FacilityDto[] }>("/api/admin/directory/facilities"),
         api.get<{ physicians: PhysicianRow[] }>("/api/admin/physicians"),
       ]);
       setJurisdictions(j.jurisdictions);
@@ -133,7 +133,18 @@ export default function AdminCompliance() {
 
       <div className="grid-2" style={{ marginBottom: 18 }}>
         <Card>
-          <CardHead title="Facility registry" sub={`${facilities.length} registered facilities`} right={<Badge tone="info">Letterhead matching</Badge>} />
+          <CardHead
+            title="Facility registry"
+            sub={`${facilities.length} registered facilities`}
+            right={
+              <div className="row" style={{ gap: 8 }}>
+                <Badge tone="info">Letterhead matching</Badge>
+                <Link className="btn sm ghost" to="/admin/directory">
+                  Manage directory
+                </Link>
+              </div>
+            }
+          />
           <div className="table-wrap">
             <table className="data">
               <thead><tr><th>Facility</th><th>Authority</th><th>State</th></tr></thead>
@@ -141,8 +152,8 @@ export default function AdminCompliance() {
                 {facilities.map((f) => (
                   <tr key={f.id}>
                     <td><div className="strong">{f.name}</div><div className="cell-sub">{f.city ?? "—"}</div></td>
-                    <td className="small mono">{f.authority_id}</td>
-                    <td><Badge tone="muted">{jurisdictions.flatMap((j) => j.authorities).find((a) => a.id === f.authority_id)?.region ?? "National"}</Badge></td>
+                    <td className="small mono">{f.authorityId}</td>
+                    <td><Badge tone="muted">{jurisdictions.flatMap((j) => j.authorities).find((a) => a.id === f.authorityId)?.region ?? "National"}</Badge></td>
                   </tr>
                 ))}
               </tbody>
