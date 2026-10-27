@@ -49,7 +49,9 @@ chmod 700 /var/lib/mednotice-global
 mkdir -p /srv/mednotice/mednotice-global
 
 # ---------------------------------------------------------------- runtime env
-PUBLIC_IP="$(curl -fsS -m 5 http://169.254.169.254/latest/meta-data/public-ipv4 || true)"
+# IMDSv2 is enforced on this instance, so the public address needs a token.
+IMDS_TOKEN="$(curl -fsS -m 5 -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' http://169.254.169.254/latest/api/token || true)"
+PUBLIC_IP="$(curl -fsS -m 5 -H "X-aws-ec2-metadata-token: ${IMDS_TOKEN}" http://169.254.169.254/latest/meta-data/public-ipv4 || true)"
 cat > /etc/mednotice-global.env <<ENV
 NODE_ENV=production
 DATA_DIR=/var/lib/mednotice-global
