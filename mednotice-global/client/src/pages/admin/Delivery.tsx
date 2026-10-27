@@ -9,7 +9,7 @@ type WebhookEvent = { id: number; received_at: string; source: string | null; pa
 
 export default function AdminDelivery() {
   const { user } = useAuth();
-  const canAct = Boolean(user && REVIEWER_ROLES.includes(user.role));
+  const canAct = Boolean(user && REVIEWER_ROLES.includes(user.baseRole));
   const [tab, setTab] = useState<"notifications" | "webhooks">("notifications");
   const [notifications, setNotifications] = useState<NotificationRow[] | null>(null);
   const [events, setEvents] = useState<WebhookEvent[] | null>(null);

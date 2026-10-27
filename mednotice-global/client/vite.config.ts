@@ -12,7 +12,7 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 3000,
     strictPort: true,
-    allowedHosts: ["pv-6dacb6ad6961-a8532833-2aa5-491b-8f3c-05f00c0857da.style.dev", "localhost", "127.0.0.1"],
+    allowedHosts: ["pv-0d6824cb439b-62f36001-a323-4ac5-a290-257d589fdddd.style.dev", "localhost", "127.0.0.1", "169.254.77.2"],
     proxy: {
       "/api": { target: "http://127.0.0.1:4000", changeOrigin: false },
     },

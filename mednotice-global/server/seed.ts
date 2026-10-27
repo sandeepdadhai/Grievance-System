@@ -1,8 +1,10 @@
 import { all, count, get, nowIso, run, tx } from "./db.js";
 import { audit } from "./audit.js";
 import { encryptField, hashPassword, maskEmail, maskName, randomCode, sha256Hex } from "./crypto.js";
-import { findAuthority, findJurisdiction } from "./config.js";
+import { findJurisdiction } from "./config.js";
+import { findAuthority, getFacility, seedAuthorities } from "./registry.js";
 import { triage } from "./triage.js";
+import { seedRoles } from "./roles.js";
 import type { Finding } from "./verification/types.js";
 
 type SeedUser = {
@@ -24,6 +26,46 @@ const USERS: SeedUser[] = [
   { id: "USR-PATIENT-DE", email: "lena.hoffmann@demo.io", name: "Lena Hoffmann", password: "Patient!2345", role: "PATIENT", country: "DE", organisation: null },
 ];
 
+type FacilityAccount = {
+  id: string;
+  email: string;
+  name: string;
+  password: string;
+  facilityId: string;
+};
+
+/**
+ * Facility-bound compliance logins. Each account is tied to exactly one
+ * facility: it only sees the cases filed against that facility and can verify
+ * the uploaded evidence and resolve those cases. Seeded idempotently so
+ * existing databases pick the accounts up on the next boot.
+ */
+const FACILITY_ACCOUNTS: FacilityAccount[] = [
+  { id: "USR-FAC-STMARYS", email: "facility.stmarys@mednotice.global", name: "Nadia Okafor", password: "Facility!2345", facilityId: "FAC-US-001" },
+  { id: "USR-FAC-CHARITE", email: "facility.charite@mednotice.global", name: "Lukas Weber", password: "Facility!2345", facilityId: "FAC-DE-001" },
+  { id: "USR-FAC-AIIMS", email: "facility.aiims@mednotice.global", name: "Priya Nair", password: "Facility!2345", facilityId: "FAC-IN-001" },
+];
+
+export async function seedFacilityAccounts(): Promise<void> {
+  for (const account of FACILITY_ACCOUNTS) {
+    if (get("SELECT id FROM users WHERE email = ? OR id = ?", account.email, account.id)) continue;
+    const facility = getFacility(account.facilityId);
+    if (!facility) continue;
+    run(
+      `INSERT INTO users (id, email, name, password_hash, role, country, organisation, facility_id, active, mfa_enabled, created_at)
+       VALUES (?, ?, ?, ?, 'HOSPITAL_COMPLIANCE', ?, ?, ?, 1, 0, ?)`,
+      account.id,
+      account.email,
+      account.name,
+      await hashPassword(account.password),
+      facility.country,
+      facility.name,
+      facility.id,
+      nowIso(),
+    );
+  }
+}
+
 const FACILITIES: Array<{ id: string; name: string; authorityId: string; country: string; city: string; keywords: string[]; status?: string }> = [
   { id: "FAC-US-001", name: "St. Mary's General Hospital", authorityId: "US-CMS", country: "US", city: "New York", keywords: ["St. Mary's General Hospital", "500 West 42nd Street", "Joint Commission"] },
   { id: "FAC-US-002", name: "Mount Sinai Medical Center", authorityId: "US-NY-DOH", country: "US", city: "New York", keywords: ["Mount Sinai Medical Center", "One Gustave L. Levy Place"] },
@@ -31,7 +73,11 @@ const FACILITIES: Array<{ id: string; name: string; authorityId: string; country
   { id: "FAC-DE-001", name: "Charité Universitätsmedizin Berlin", authorityId: "DE-BERLIN", country: "DE", city: "Berlin", keywords: ["Charité", "Charitéplatz 1", "Universitätsmedizin Berlin"] },
   { id: "FAC-DE-002", name: "Klinikum rechts der Isar", authorityId: "DE-BMG", country: "DE", city: "München", keywords: ["Klinikum rechts der Isar", "Ismaninger Straße 22"] },
   { id: "FAC-GB-001", name: "St Thomas' Hospital", authorityId: "GB-CQC", country: "GB", city: "London", keywords: ["St Thomas' Hospital", "Westminster Bridge Road", "Guy's and St Thomas'"] },
-  { id: "FAC-IN-001", name: "All India Institute of Medical Sciences", authorityId: "IN-NHA", country: "IN", city: "New Delhi", keywords: ["All India Institute of Medical Sciences", "AIIMS", "Ansari Nagar"] },
+  { id: "FAC-IN-001", name: "All India Institute of Medical Sciences", authorityId: "IN-MOHFW", country: "IN", city: "New Delhi", keywords: ["All India Institute of Medical Sciences", "AIIMS", "Ansari Nagar"] },
+  { id: "FAC-IN-002", name: "Safdarjung Hospital", authorityId: "IN-SHA-DL", country: "IN", city: "New Delhi", keywords: ["Safdarjung Hospital", "Vardhman Mahavir Medical College", "Ansari Nagar West"] },
+  { id: "FAC-IN-003", name: "King Edward Memorial Hospital", authorityId: "IN-SHA-MH", country: "IN", city: "Mumbai", keywords: ["King Edward Memorial Hospital", "KEM Hospital", "Parel"] },
+  { id: "FAC-IN-004", name: "National Institute of Mental Health and Neurosciences", authorityId: "IN-SHA-KA", country: "IN", city: "Bengaluru", keywords: ["National Institute of Mental Health and Neurosciences", "NIMHANS", "Hosur Road"] },
+  { id: "FAC-IN-005", name: "Apollo Hospitals", authorityId: "IN-SHA-TN", country: "IN", city: "Chennai", keywords: ["Apollo Hospitals", "Greams Road", "Apollo"] },
   { id: "FAC-SG-001", name: "Singapore General Hospital", authorityId: "SG-MOH", country: "SG", city: "Singapore", keywords: ["Singapore General Hospital", "Outram Road"] },
   { id: "FAC-BR-001", name: "Hospital das Clínicas da FMUSP", authorityId: "BR-ANS", country: "BR", city: "São Paulo", keywords: ["Hospital das Clínicas", "Av. Dr. Enéas de Carvalho Aguiar"] },
 ];
@@ -404,7 +450,13 @@ function hoursFromNow(hours: number): string {
 }
 
 export async function seed(): Promise<void> {
-  if (count("SELECT COUNT(*) AS n FROM users") > 0) return;
+  seedRoles();
+  seedAuthorities();
+  await seedFacilityAccounts();
+  if (count("SELECT COUNT(*) AS n FROM users") > 0) {
+    seedCommunity();
+    return;
+  }
 
   for (const u of USERS) {
     run(
@@ -432,6 +484,10 @@ export async function seed(): Promise<void> {
       f.status ?? "VERIFIED",
     );
   }
+
+  // Facilities exist now, so the facility-bound logins can be created on the
+  // very first boot instead of waiting for the next restart.
+  await seedFacilityAccounts();
 
   for (const l of LICENSES) {
     run(
@@ -577,23 +633,26 @@ export async function seed(): Promise<void> {
       const adapter = findAuthority(c.authorityId)?.authority.adapter ?? "US-FHIR";
       const transmissionId = `TRX-${randomCode(8)}`;
       const txAt = new Date(new Date(createdAt).getTime() + 90_000).toISOString();
+      const ackId = `sim-${randomCode(8)}`;
       run(
-        `INSERT INTO transmissions (id, case_id, adapter_code, status, request_json, response_json, http_status, latency_ms, attempts, created_at)
-         VALUES (?, ?, ?, 'DELIVERED', ?, ?, 201, 142, 1, ?)`,
+        `INSERT INTO transmissions (id, case_id, adapter_code, status, request_json, response_json, http_status, latency_ms, attempts, created_at, reference)
+         VALUES (?, ?, ?, 'DELIVERED', ?, ?, 201, 142, 1, ?, ?)`,
         transmissionId,
         caseId,
         adapter,
         JSON.stringify({ caseId, priority, masked: true, adapter }),
-        JSON.stringify({ simulated: true, ackId: `sim-${randomCode(8)}`, message: "Accepted by simulated authority endpoint" }),
+        JSON.stringify({ simulated: true, ackId, message: "Accepted by simulated authority endpoint" }),
         txAt,
+        ackId,
       );
+      run("UPDATE cases SET authority_reference = ? WHERE id = ?", ackId, caseId);
       audit({
         ts: txAt,
         actor: { id: null, role: "SYSTEM" },
         action: "CASE_ROUTED",
         entityType: "case",
         entityId: caseId,
-        details: { adapter, simulated: true, httpStatus: 201, latencyMs: 142 },
+        details: { transmissionId, adapter, simulated: true, httpStatus: 201, latencyMs: 142 },
       });
 
       const subject = `[${priority}] ${caseId} · ${t.category} · ${facility.name}`;
@@ -602,10 +661,11 @@ export async function seed(): Promise<void> {
         ["EMAIL", findAuthority(c.authorityId)?.authority.contactEmail ?? "complaints@example.gov"],
         ["WEBHOOK", findAuthority(c.authorityId)?.authority.webhook ?? "https://sandbox.mednotice.local/hook"],
       ] as const) {
+        const notificationId = `NTF-${randomCode(9)}`;
         run(
           `INSERT INTO notifications (id, case_id, channel, target, subject, body, status, attempts, next_attempt_at, created_at, sent_at)
            VALUES (?, ?, ?, ?, ?, ?, 'SENT', 1, ?, ?, ?)`,
-          `NTF-${randomCode(9)}`,
+          notificationId,
           caseId,
           channel,
           target,
@@ -615,6 +675,14 @@ export async function seed(): Promise<void> {
           txAt,
           txAt,
         );
+        audit({
+          ts: txAt,
+          actor: { id: null, role: "SYSTEM" },
+          action: "NOTIFICATION_SENT",
+          entityType: "case",
+          entityId: caseId,
+          details: { notificationId, channel, target, transmissionId, simulated: true },
+        });
       }
     }
 
@@ -636,6 +704,7 @@ export async function seed(): Promise<void> {
     run("UPDATE cases SET updated_at = sla_due_at WHERE status = 'ROUTE_FAILED'");
   });
 
+  seedCommunity();
   console.log(`[seed] ${USERS.length} users, ${FACILITIES.length} facilities, ${SEED_CASES.length} cases`);
 }
 
@@ -658,4 +727,150 @@ export function firstCaseId(): string | undefined {
 
 export function allCaseIds(): string[] {
   return all<{ id: string }>("SELECT id FROM cases ORDER BY created_at DESC").map((r) => r.id);
+}
+
+/**
+ * Community starter content: a mix of patient and guest voices plus one
+ * moderated post so the review workflow is visible on first boot.
+ */
+export function seedCommunity(): void {
+  if (count("SELECT COUNT(*) AS n FROM community_posts") > 0) return;
+  const now = Date.now();
+  const at = (hoursAgo: number) => new Date(now - hoursAgo * 3_600_000).toISOString();
+  const posts: Array<{
+    id: string;
+    userId: string | null;
+    author: string;
+    guest: boolean;
+    title: string;
+    body: string;
+    topic: string;
+    status: string;
+    hoursAgo: number;
+  }> = [
+    {
+      id: "POST-SEED-1",
+      userId: "USR-PATIENT",
+      author: "Maria Santos",
+      guest: false,
+      title: "Billing desk added charges after discharge — is this normal?",
+      body: "I was discharged from a hospital in New York and the final bill included a 'consumables' line that was never explained. I have the itemised bill and the discharge summary. Filing a grievance through the portal took about ten minutes, and I attached both documents. Sharing here in case others are unsure whether small charges are worth reporting.",
+      topic: "Billing",
+      status: "VISIBLE",
+      hoursAgo: 30,
+    },
+    {
+      id: "POST-SEED-2",
+      userId: null,
+      author: "Guest from Manchester",
+      guest: true,
+      title: "How long does the manual document review usually take?",
+      body: "My upload came back as pending manual review because the scan had no text layer. The tracking page still shows the same status after a day. Does the review happen within the SLA shown on the case, or separately?",
+      topic: "Documents",
+      status: "VISIBLE",
+      hoursAgo: 18,
+    },
+    {
+      id: "POST-SEED-3",
+      userId: "USR-PATIENT-DE",
+      author: "Lena Hoffmann",
+      guest: false,
+      title: "Appreciation for the multilingual narrative intake option",
+      body: "Writing the complaint in German made it much easier to describe what happened to my father at the emergency department in Berlin. The summary I received afterwards was clear, and the case was routed to the state health authority the same evening.",
+      topic: "Feedback",
+      status: "VISIBLE",
+      hoursAgo: 6,
+    },
+    {
+      id: "POST-SEED-4",
+      userId: null,
+      author: "Anonymous",
+      guest: true,
+      title: "Post held for review",
+      body: "This submission named individual staff members and included a phone number, which the community guidelines do not allow. A moderator has hidden it pending review.",
+      topic: "General",
+      status: "HIDDEN",
+      hoursAgo: 40,
+    },
+  ];
+
+  for (const p of posts) {
+    const createdAt = at(p.hoursAgo);
+    run(
+      `INSERT INTO community_posts (id, author_user_id, author_name, is_guest, title, body, topic, status, pinned, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      p.id,
+      p.userId,
+      p.author,
+      p.guest ? 1 : 0,
+      p.title,
+      p.body,
+      p.topic,
+      p.status,
+      createdAt,
+      createdAt,
+    );
+    audit({
+      ts: createdAt,
+      actor: p.userId ? { id: p.userId, role: "PATIENT" } : { id: null, role: "PUBLIC" },
+      action: "COMMUNITY_POST_CREATED",
+      entityType: "community_post",
+      entityId: p.id,
+      details: { topic: p.topic, guest: p.guest, seeded: true },
+    });
+  }
+
+  const comments: Array<{ id: string; postId: string; userId: string | null; author: string; guest: boolean; body: string; hoursAgo: number }> = [
+    {
+      id: "CMT-SEED-1",
+      postId: "POST-SEED-1",
+      userId: null,
+      author: "Guest from Lisbon",
+      guest: true,
+      body: "Itemised bills are exactly what the grievance needs. Keep the discharge summary too — it shows what was clinically expected.",
+      hoursAgo: 24,
+    },
+    {
+      id: "CMT-SEED-2",
+      postId: "POST-SEED-1",
+      userId: "USR-PATIENT",
+      author: "Maria Santos",
+      guest: false,
+      body: "Thank you. The compliance officer has already asked for the pharmacy receipts, so it seems to be moving.",
+      hoursAgo: 20,
+    },
+    {
+      id: "CMT-SEED-3",
+      postId: "POST-SEED-2",
+      userId: "USR-MINISTRY",
+      author: "Dr. Jonas Brandt",
+      guest: false,
+      body: "Manual review is separate from the SLA clock and is worked in submission order. Uploading a text-based PDF usually clears it automatically.",
+      hoursAgo: 12,
+    },
+  ];
+
+  for (const c of comments) {
+    const createdAt = at(c.hoursAgo);
+    run(
+      `INSERT INTO community_comments (id, post_id, author_user_id, author_name, is_guest, body, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'VISIBLE', ?, ?)`,
+      c.id,
+      c.postId,
+      c.userId,
+      c.author,
+      c.guest ? 1 : 0,
+      c.body,
+      createdAt,
+      createdAt,
+    );
+    audit({
+      ts: createdAt,
+      actor: c.userId ? { id: c.userId, role: "PATIENT" } : { id: null, role: "PUBLIC" },
+      action: "COMMUNITY_COMMENT_CREATED",
+      entityType: "community_comment",
+      entityId: c.id,
+      details: { postId: c.postId, guest: c.guest, seeded: true },
+    });
+  }
 }

@@ -33,6 +33,10 @@ const CRITICAL_TERMS: Array<[RegExp, string]> = [
   [/\b(anaphylaxis|severe allergic reaction|airway)\b/i, "Airway / anaphylaxis risk"],
   [/\bunresponsive|unconscious|coma\b/i, "Reduced consciousness"],
   [/\b(notfall|lebensgefahr|gestorben|verstorben)\b/i, "German-language emergency indicator"],
+  [/मृत्यु|मौत|निधन|देहांत/, "Patient death reported (Hindi)"],
+  [/दिल का दौरा|कार्डियक अरेस्ट|सांस रुक/, "Cardiorespiratory arrest (Hindi)"],
+  [/तेज़ रक्तस्राव|अत्यधिक रक्तस्राव|खून बह/, "Severe haemorrhage (Hindi)"],
+  [/बेहोश|अचेत/, "Reduced consciousness (Hindi)"],
 ];
 
 const HIGH_TERMS: Array<[RegExp, string]> = [

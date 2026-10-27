@@ -9,13 +9,20 @@ export type UserRow = {
   email: string;
   name: string;
   password_hash: string;
-  role: Role;
+  /** Built-in role key or administrator-defined custom role key. */
+  role: string;
   country: string | null;
   organisation: string | null;
+  /** Facility this account is bound to; null means state-wide scope. */
+  facility_id: string | null;
   active: number;
   mfa_enabled: number;
   last_login_at: string | null;
   created_at: string;
+  /** WhatsApp number for patient notifications (AES-256-GCM encrypted). */
+  phone_enc: string | null;
+  /** 1 once the user explicitly asked for WhatsApp updates. */
+  whatsapp_opt_in: number | null;
 };
 
 export type CaseRow = {
@@ -52,6 +59,10 @@ export type CaseRow = {
   updated_at: string;
   sla_due_at: string;
   resolved_at: string | null;
+  /** Latest status reported by the receiving health authority. */
+  authority_status: string | null;
+  authority_status_at: string | null;
+  authority_reference: string | null;
 };
 
 export type DocumentRow = {
@@ -126,6 +137,9 @@ export type CaseDto = {
   updatedAt: string;
   slaDueAt: string;
   resolvedAt: string | null;
+  authorityStatus: string | null;
+  authorityStatusAt: string | null;
+  authorityReference: string | null;
   documents?: DocumentDto[];
 };
 
@@ -191,6 +205,9 @@ export function caseToDto(row: CaseRow, actor: PiiActor, documents?: DocumentRow
     updatedAt: row.updated_at,
     slaDueAt: row.sla_due_at,
     resolvedAt: row.resolved_at,
+    authorityStatus: row.authority_status ?? null,
+    authorityStatusAt: row.authority_status_at ?? null,
+    authorityReference: row.authority_reference ?? null,
   };
   if (documents) dto.documents = documents.map(documentToDto);
   return dto;

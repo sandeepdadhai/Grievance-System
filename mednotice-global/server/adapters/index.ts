@@ -1,5 +1,6 @@
 import { get } from "../db.js";
-import { findAuthority, findJurisdiction } from "../config.js";
+import { JURISDICTIONS, findJurisdiction } from "../config.js";
+import { findAuthority, listAuthorities } from "../registry.js";
 import { fhirAdapter } from "./fhir.js";
 import { hl7Adapter } from "./hl7v2.js";
 import { restAdapter } from "./rest.js";
@@ -19,6 +20,7 @@ export type AdapterRow = {
   country: string;
   kind: AdapterKind;
   endpoint: string;
+  status_endpoint: string | null;
   auth_type: string;
   auth_config_enc: string | null;
   mapping_json: string;
@@ -55,6 +57,7 @@ export function resolveAdapter(code: string): { config: AdapterConfig; row: Adap
         code: row.code,
         kind: row.kind,
         endpoint: row.endpoint,
+        statusEndpoint: row.status_endpoint ?? null,
         authType: row.auth_type,
         authConfig: row.auth_config_enc ? (JSON.parse(row.auth_config_enc) as Record<string, string>) : null,
         mapping: JSON.parse(row.mapping_json || "{}"),
@@ -63,9 +66,9 @@ export function resolveAdapter(code: string): { config: AdapterConfig; row: Adap
     };
   }
 
-  for (const jurisdiction of ["US", "DE", "GB", "IN", "SG", "BR"]) {
-    const j = findJurisdiction(jurisdiction);
-    const authority = j?.authorities.find((a) => a.adapter === code);
+  for (const jurisdiction of JURISDICTIONS) {
+    const j = findJurisdiction(jurisdiction.code);
+    const authority = listAuthorities({ country: jurisdiction.code, includeInactive: true }).find((a) => a.adapter === code);
     if (authority && j) {
       return {
         row: null,
@@ -73,6 +76,7 @@ export function resolveAdapter(code: string): { config: AdapterConfig; row: Adap
           code,
           kind: inferKind(code),
           endpoint: authority.webhook,
+          statusEndpoint: null,
           authType: "NONE",
           mapping: { jurisdiction: j.code, fallback: true },
           simulate: true,

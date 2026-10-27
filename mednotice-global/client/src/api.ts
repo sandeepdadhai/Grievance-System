@@ -1,4 +1,4 @@
-import type { Priority } from "./types";
+import type { Priority, User } from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -33,6 +33,16 @@ export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body: body instanceof FormData ? body : JSON.stringify(body ?? {}) }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body: JSON.stringify(body ?? {}) }),
+  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+};
+
+export const COMMUNICATION_KIND_LABEL: Record<string, string> = {
+  NOTIFICATION: "Notification",
+  TRANSMISSION: "Transmission",
+  STATUS_SYNC: "Status pull",
+  WEBHOOK_EVENT: "Inbound webhook",
+  COMMUNITY_POST: "Community post",
+  COMMUNITY_COMMENT: "Community comment",
 };
 
 export const PRIORITY_META: Record<Priority, { label: string; short: string; color: string; description: string }> = {
@@ -101,6 +111,17 @@ export function bytes(size: number): string {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(0)} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+export function hasPermission(user: User | null, permission: string): boolean {
+  if (!user) return false;
+  if (user.baseRole === "SUPER_ADMIN") return true;
+  return Boolean(user.permissions?.includes(permission));
+}
+
+export function roleLabel(user: User | null): string {
+  if (!user) return "";
+  return user.roleName ?? ROLE_LABELS[user.role] ?? user.role;
 }
 
 export const ROLE_LABELS: Record<string, string> = {

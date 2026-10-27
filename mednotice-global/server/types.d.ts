@@ -7,9 +7,17 @@ declare global {
         id: string;
         email: string;
         name: string;
-        role: Role;
+        /** Stored role key — a built-in role or an administrator-defined custom role. */
+        role: string;
+        roleName: string;
+        /** Capability family used for existing RBAC checks. */
+        baseRole: Role;
+        permissions: string[];
         country: string | null;
         organisation: string | null;
+        /** Facility binding — narrows every case query to this facility. */
+        facilityId: string | null;
+        facilityName: string | null;
       };
       sessionId?: string;
     }

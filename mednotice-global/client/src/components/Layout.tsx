@@ -1,7 +1,8 @@
 import { Link, NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
-import { ROLE_LABELS } from "../api";
-import { REVIEWER_ROLES, STAFF_ROLES, useAuth } from "../auth";
-import { Icon, LoadingPage } from "./ui";
+import { hasPermission, roleLabel } from "../api";
+import { useAuth } from "../auth";
+import { ChatWidget } from "./ChatWidget";
+import { Icon } from "./ui";
 
 function Brand() {
   return (
@@ -25,17 +26,19 @@ export function PublicLayout() {
           <NavLink to="/" end>Overview</NavLink>
           <NavLink to="/submit">File a grievance</NavLink>
           <NavLink to="/track">Track a case</NavLink>
-          {user && STAFF_ROLES.includes(user.role) && <NavLink to="/admin">Console</NavLink>}
+          <NavLink to="/community">Community</NavLink>
+          {user && user.baseRole !== "PATIENT" && <NavLink to="/admin">Console</NavLink>}
         </nav>
         <div className="row" style={{ gap: 8 }}>
           {user ? (
             <>
-              <Link to={user.role === "PATIENT" ? "/portal" : "/admin"} className="btn sm ghost">My workspace</Link>
+              <Link to={user.baseRole === "PATIENT" ? "/portal" : "/admin"} className="btn sm ghost">My workspace</Link>
               <LogoutButton />
             </>
           ) : (
             <>
               <Link to="/login" className="btn sm ghost">Sign in</Link>
+              <Link to="/signup" className="btn sm ghost">Patient sign up</Link>
               <Link to="/submit" className="btn sm primary">Start a complaint</Link>
             </>
           )}
@@ -52,9 +55,12 @@ export function PublicLayout() {
         <div className="row" style={{ gap: 16 }}>
           <Link to="/submit">File a grievance</Link>
           <Link to="/track">Track a case</Link>
+          <Link to="/community">Community</Link>
+          <Link to="/signup">Patient sign up</Link>
           <Link to="/login">Staff sign in</Link>
         </div>
       </footer>
+      <ChatWidget />
     </div>
   );
 }
@@ -76,26 +82,34 @@ function LogoutButton() {
 }
 
 const NAV = [
-  { to: "/admin", label: "Overview", icon: "grid" as const, end: true },
-  { to: "/admin/cases", label: "Cases", icon: "folder" as const },
-  { to: "/admin/delivery", label: "Delivery", icon: "send" as const },
-  { to: "/admin/adapters", label: "Adapters", icon: "plug" as const },
-  { to: "/admin/audit", label: "Audit log", icon: "activity" as const },
-  { to: "/admin/users", label: "Users & roles", icon: "users" as const },
-  { to: "/admin/compliance", label: "Compliance", icon: "shield" as const },
+  { to: "/admin", label: "Overview", icon: "grid" as const, end: true, group: "Operations" as const },
+  { to: "/admin/cases", label: "Cases", icon: "folder" as const, group: "Operations" as const },
+  { to: "/admin/facility", label: "My facility", icon: "building" as const, group: "Operations" as const },
+  { to: "/admin/dispatch", label: "Dispatch", icon: "truck" as const, group: "Operations" as const },
+  { to: "/admin/delivery", label: "Delivery", icon: "send" as const, group: "Operations" as const },
+  { to: "/admin/communications", label: "Communications", icon: "mail" as const, group: "Operations" as const },
+  { to: "/admin/community", label: "Community", icon: "message" as const, group: "Operations" as const },
+  { to: "/admin/directory", label: "Directory", icon: "building" as const, group: "Governance" as const },
+  { to: "/admin/adapters", label: "Adapters", icon: "plug" as const, group: "Governance" as const },
+  { to: "/admin/audit", label: "Audit log", icon: "activity" as const, group: "Governance" as const },
+  { to: "/admin/users", label: "Users & roles", icon: "users" as const, group: "Governance" as const },
+  { to: "/admin/compliance", label: "Compliance", icon: "shield" as const, group: "Governance" as const },
 ];
 
 export function AdminLayout() {
   const { user, logout } = useAuth();
   const location = useLocation();
   if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname)}`} replace />;
-  if (!STAFF_ROLES.includes(user.role)) return <Navigate to="/portal" replace />;
+  if (user.baseRole === "PATIENT") return <Navigate to="/portal" replace />;
 
   const nav = NAV.filter((item) => {
-    if (item.to === "/admin/users") return user.role === "SUPER_ADMIN";
-    if (item.to === "/admin/audit") return user.role === "SUPER_ADMIN" || user.role === "SYSTEM_AUDITOR";
-    if (item.to === "/admin/adapters") return true;
-    if (item.to === "/admin/delivery") return REVIEWER_ROLES.includes(user.role) || user.role === "SYSTEM_AUDITOR";
+    if (item.to === "/admin/facility") return Boolean(user.facilityId);
+    if (item.to === "/admin/users") return user.baseRole === "SUPER_ADMIN";
+    if (item.to === "/admin/audit") return user.baseRole === "SUPER_ADMIN" || hasPermission(user, "audit.view");
+    if (item.to === "/admin/delivery") return hasPermission(user, "delivery.view");
+    if (item.to === "/admin/communications") return hasPermission(user, "delivery.view");
+    if (item.to === "/admin/community") return hasPermission(user, "community.moderate");
+    if (item.to === "/admin/compliance") return hasPermission(user, "compliance.view");
     return true;
   });
 
@@ -105,7 +119,7 @@ export function AdminLayout() {
         <Brand />
         <div className="nav-group">
           <div className="nav-label">Operations</div>
-          {nav.slice(0, 4).map((item) => (
+          {nav.filter((item) => item.group === "Operations").map((item) => (
             <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
               <Icon name={item.icon} />
               <span>{item.label}</span>
@@ -114,8 +128,8 @@ export function AdminLayout() {
         </div>
         <div className="nav-group">
           <div className="nav-label">Governance</div>
-          {nav.slice(4).map((item) => (
-            <NavLink key={item.to} to={item.to} className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+          {nav.filter((item) => item.group === "Governance").map((item) => (
+            <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
               <Icon name={item.icon} />
               <span>{item.label}</span>
             </NavLink>
@@ -127,7 +141,7 @@ export function AdminLayout() {
             <span className="avatar">{user.name.split(" ").map((p) => p[0]).slice(0, 2).join("")}</span>
             <span className="user-meta">
               <strong>{user.name}</strong>
-              <span>{ROLE_LABELS[user.role] ?? user.role}</span>
+              <span>{roleLabel(user)}</span>
             </span>
           </div>
           <button
@@ -147,7 +161,11 @@ export function AdminLayout() {
         <div className="topbar">
           <div className="topbar-title">
             <span className="dot" />
-            {user.country ? `${user.country} jurisdiction scope` : "Global scope"}
+            {user.facilityName
+              ? `Facility scope · ${user.facilityName}`
+              : user.country
+                ? `${user.country} jurisdiction scope`
+                : "Global scope"}
             <span className="faint">·</span>
             <span className="faint">{user.organisation ?? "MedNotice-Global"}</span>
           </div>

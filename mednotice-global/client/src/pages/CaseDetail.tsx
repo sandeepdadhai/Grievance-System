@@ -25,7 +25,7 @@ export default function CaseDetail({ staff = false }: { staff?: boolean }) {
   const [adapters, setAdapters] = useState<AdapterDto[]>([]);
   const [form, setForm] = useState({ priority: "P3" as Priority, category: "", note: "", outcome: "", adapterCode: "" });
 
-  const canReview = Boolean(user && REVIEWER_ROLES.includes(user.role));
+  const canReview = Boolean(user && REVIEWER_ROLES.includes(user.baseRole));
 
   const load = useCallback(async () => {
     try {

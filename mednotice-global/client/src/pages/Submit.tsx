@@ -53,6 +53,17 @@ async function preScreen(file: File): Promise<PreScreen> {
 
 const STEP_LABELS = ["Jurisdiction", "Grievance", "Documents", "Review"];
 
+const LANGUAGE_LABELS: Record<string, string> = {
+  en: "English",
+  de: "Deutsch (German)",
+  pt: "Português (Portuguese)",
+  hi: "हिन्दी (Hindi)",
+  mr: "मराठी (Marathi)",
+  kn: "ಕನ್ನಡ (Kannada)",
+  ta: "தமிழ் (Tamil)",
+  bn: "বাংলা (Bengali)",
+};
+
 export default function Submit() {
   const { user } = useAuth();
   const [jurisdictions, setJurisdictions] = useState<Jurisdiction[]>([]);
@@ -401,7 +412,7 @@ export default function Submit() {
               <div className="field">
                 <label htmlFor="language">Preferred language</label>
                 <select id="language" className="select" value={language} onChange={(e) => setLanguage(e.target.value)}>
-                  {jurisdiction?.languages.map((l) => <option key={l} value={l}>{l.toUpperCase()}</option>)}
+                  {jurisdiction?.languages.map((l) => <option key={l} value={l}>{LANGUAGE_LABELS[l] ?? l.toUpperCase()}</option>)}
                 </select>
                 <span className="hint">Notifications and authority payloads include this preference.</span>
               </div>

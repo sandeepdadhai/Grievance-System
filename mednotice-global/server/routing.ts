@@ -1,6 +1,7 @@
 import { all, get, nowIso, run } from "./db.js";
 import { audit } from "./audit.js";
-import { findAuthority, findJurisdiction } from "./config.js";
+import { findJurisdiction } from "./config.js";
+import { findAuthority } from "./registry.js";
 import { decryptField, maskEmail, maskName, maskPayload, maskText, randomCode } from "./crypto.js";
 import { caseToDto, type CaseRow, type DocumentRow } from "./models.js";
 import { implementationFor, resolveAdapter } from "./adapters/index.js";
@@ -109,7 +110,7 @@ export async function transmitCase(
   if (!caseRow) throw Object.assign(new Error("Case not found"), { status: 404 });
   const documents = all<DocumentRow>("SELECT * FROM documents WHERE case_id = ? ORDER BY uploaded_at", caseId);
 
-  const adapterCode = opts.adapterCode ?? findAuthority(caseRow.authority_id)?.authority.adapter ?? "US-FHIR";
+  const adapterCode = opts.adapterCode ?? findAuthority(caseRow.authority_id)?.authority.adapter ?? "IN-FHIR";
   const { config } = resolveAdapter(adapterCode);
   const impl = implementationFor(config.kind);
   const payload = buildCasePayload(caseRow, documents);
@@ -142,8 +143,8 @@ export async function transmitCase(
   const safeRequest = maskPayload(builtText, [payload.patient.name]);
 
   run(
-    `INSERT INTO transmissions (id, case_id, adapter_code, status, request_json, response_json, http_status, latency_ms, attempts, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO transmissions (id, case_id, adapter_code, status, request_json, response_json, http_status, latency_ms, attempts, created_at, reference)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     transmissionId,
     caseId,
     adapterCode,
@@ -154,6 +155,7 @@ export async function transmitCase(
     latencyMs,
     1,
     nowIso(),
+    ack.ackId,
   );
 
   const currentStatus = caseRow.status;
@@ -165,7 +167,13 @@ export async function transmitCase(
       ? currentStatus
       : "ROUTE_FAILED";
 
-  run("UPDATE cases SET status = ?, updated_at = ? WHERE id = ?", nextStatus, nowIso(), caseId);
+  run(
+    "UPDATE cases SET status = ?, authority_reference = COALESCE(?, authority_reference), updated_at = ? WHERE id = ?",
+    nextStatus,
+    ack.ackId,
+    nowIso(),
+    caseId,
+  );
 
   audit({
     actor: opts.actor ?? { id: null, role: "SYSTEM" },
@@ -175,6 +183,7 @@ export async function transmitCase(
     ip: opts.ip,
     userAgent: opts.userAgent,
     details: {
+      transmissionId,
       adapter: adapterCode,
       kind: config.kind,
       simulated,

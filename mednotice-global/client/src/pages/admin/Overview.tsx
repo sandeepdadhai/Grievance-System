@@ -106,6 +106,11 @@ export default function AdminOverview() {
         </Card>
       </div>
 
+      <Card style={{ marginBottom: 18 }}>
+        <CardHead title="Cases by region" sub="State, province and national distribution" />
+        <HBars items={data.byRegion.map((r) => ({ label: r.region, value: Number(r.n) }))} />
+      </Card>
+
       <div className="grid-2">
         <Card flush>
           <div style={{ padding: "18px 20px 12px" }}>

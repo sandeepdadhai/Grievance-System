@@ -7,6 +7,8 @@ const DEMOS = [
   { email: "admin@mednotice.demo", password: "Admin!2345", label: "Super Administrator", org: "MedNotice-Global" },
   { email: "reviewer@ministry.demo", password: "Review!2345", label: "Ministry Reviewer", org: "Germany · BMG" },
   { email: "compliance@hospital.demo", password: "Comply!2345", label: "Hospital Compliance", org: "US · St. Mary's" },
+  { email: "facility.stmarys@mednotice.global", password: "Facility!2345", label: "Facility officer", org: "St. Mary's · New York" },
+  { email: "facility.aiims@mednotice.global", password: "Facility!2345", label: "Facility officer", org: "AIIMS · New Delhi" },
   { email: "auditor@mednotice.demo", password: "Audit!2345", label: "System Auditor", org: "Read-only" },
   { email: "patient@demo.io", password: "Patient!2345", label: "Patient", org: "US · demo patient" },
 ];
@@ -117,7 +119,7 @@ export default function Login() {
             ))}
           </div>
           <p className="tiny faint" style={{ marginTop: 16 }}>
-            No account? <Link to="/submit">File a grievance as a guest</Link> — you will receive a case reference and access code.
+            New patient? <Link to="/signup">Create an account</Link> to keep every case in one workspace. Prefer to stay anonymous? <Link to="/submit">File a grievance as a guest</Link> — you will receive a case reference and access code.
           </p>
         </div>
       </main>

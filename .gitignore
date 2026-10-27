@@ -1,0 +1,2 @@
+# agent tooling binaries (cloudflared, terraform, etc.)
+.tools/

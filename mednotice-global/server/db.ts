@@ -19,7 +19,19 @@ CREATE TABLE IF NOT EXISTS users (
   active INTEGER NOT NULL DEFAULT 1,
   mfa_enabled INTEGER NOT NULL DEFAULT 0,
   last_login_at TEXT,
+  consent_at TEXT,
   created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS roles (
+  key TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  base_role TEXT NOT NULL,
+  permissions_json TEXT NOT NULL DEFAULT '[]',
+  builtin INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -65,7 +77,10 @@ CREATE TABLE IF NOT EXISTS cases (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   sla_due_at TEXT NOT NULL,
-  resolved_at TEXT
+  resolved_at TEXT,
+  authority_status TEXT,
+  authority_status_at TEXT,
+  authority_reference TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_cases_status ON cases(status);
@@ -154,10 +169,34 @@ CREATE TABLE IF NOT EXISTS transmissions (
   http_status INTEGER,
   latency_ms INTEGER,
   attempts INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  reference TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_transmissions_case ON transmissions(case_id);
+CREATE INDEX IF NOT EXISTS idx_transmissions_created ON transmissions(created_at);
+
+CREATE TABLE IF NOT EXISTS case_status_syncs (
+  id TEXT PRIMARY KEY,
+  case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  transmission_id TEXT,
+  authority_id TEXT NOT NULL,
+  adapter_code TEXT NOT NULL,
+  endpoint TEXT NOT NULL,
+  status TEXT NOT NULL,
+  remote_status TEXT,
+  remote_reference TEXT,
+  message TEXT,
+  http_status INTEGER,
+  latency_ms INTEGER,
+  applied INTEGER NOT NULL DEFAULT 0,
+  simulated INTEGER NOT NULL DEFAULT 0,
+  response_json TEXT NOT NULL DEFAULT '{}',
+  checked_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_status_syncs_case ON case_status_syncs(case_id, checked_at);
+CREATE INDEX IF NOT EXISTS idx_status_syncs_checked ON case_status_syncs(checked_at);
 
 CREATE TABLE IF NOT EXISTS adapters (
   code TEXT PRIMARY KEY,
@@ -165,6 +204,7 @@ CREATE TABLE IF NOT EXISTS adapters (
   country TEXT NOT NULL,
   kind TEXT NOT NULL,
   endpoint TEXT NOT NULL,
+  status_endpoint TEXT,
   auth_type TEXT NOT NULL DEFAULT 'NONE',
   auth_config_enc TEXT,
   mapping_json TEXT NOT NULL DEFAULT '{}',
@@ -173,6 +213,21 @@ CREATE TABLE IF NOT EXISTS adapters (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS authorities (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  country TEXT NOT NULL,
+  region TEXT NOT NULL,
+  adapter TEXT NOT NULL,
+  contact_email TEXT NOT NULL,
+  webhook TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'ACTIVE',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_authorities_country ON authorities(country);
 
 CREATE TABLE IF NOT EXISTS facilities (
   id TEXT PRIMARY KEY,
@@ -199,7 +254,67 @@ CREATE TABLE IF NOT EXISTS webhook_events (
   source TEXT,
   payload_json TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS community_posts (
+  id TEXT PRIMARY KEY,
+  author_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  author_name TEXT NOT NULL,
+  is_guest INTEGER NOT NULL DEFAULT 0,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  topic TEXT NOT NULL DEFAULT 'General',
+  status TEXT NOT NULL DEFAULT 'VISIBLE',
+  pinned INTEGER NOT NULL DEFAULT 0,
+  edit_note TEXT,
+  edited_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  edited_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_community_posts_status ON community_posts(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_community_posts_author ON community_posts(author_user_id);
+
+CREATE TABLE IF NOT EXISTS community_comments (
+  id TEXT PRIMARY KEY,
+  post_id TEXT NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
+  author_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  author_name TEXT NOT NULL,
+  is_guest INTEGER NOT NULL DEFAULT 0,
+  body TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'VISIBLE',
+  edit_note TEXT,
+  edited_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  edited_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_community_comments_post ON community_comments(post_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_community_comments_status ON community_comments(status);
 `);
+
+/** Additive column migration for databases created before a field existed. */
+function ensureColumn(table: string, column: string, ddl: string): void {
+  const columns = all<{ name: string }>(`PRAGMA table_info(${table})`);
+  if (!columns.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+}
+
+ensureColumn("users", "consent_at", "TEXT");
+/** Facility-bound accounts only see cases filed against their own facility. */
+ensureColumn("users", "facility_id", "TEXT");
+ensureColumn("facilities", "updated_at", "TEXT");
+ensureColumn("cases", "authority_status", "TEXT");
+ensureColumn("cases", "authority_status_at", "TEXT");
+ensureColumn("cases", "authority_reference", "TEXT");
+ensureColumn("transmissions", "reference", "TEXT");
+ensureColumn("adapters", "status_endpoint", "TEXT");
+/** WhatsApp number for patient notifications (AES-256-GCM encrypted). */
+ensureColumn("users", "phone_enc", "TEXT");
+ensureColumn("users", "whatsapp_opt_in", "INTEGER NOT NULL DEFAULT 0");
+/** Queue payload for channels that need structured fields (WhatsApp templates). */
+ensureColumn("notifications", "meta_json", "TEXT");
+ensureColumn("notifications", "provider_ref", "TEXT");
 
 export function nowIso(): string {
   return new Date().toISOString();

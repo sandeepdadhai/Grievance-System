@@ -1,10 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
 import { get, nowIso, run } from "../db.js";
-import { hashPassword, verifyPassword } from "../crypto.js";
+import { decryptField, encryptField, hashPassword, randomCode, verifyPassword } from "../crypto.js";
+import { maskWhatsAppNumber, normalizeWhatsAppNumber, whatsappStatus } from "../whatsapp.js";
 import { attachUser, createSession, destroySession, requireAuth } from "../auth.js";
 import { audit } from "../audit.js";
 import { asyncHandler, createRateLimiter, HttpError, meta, parseBody } from "../http.js";
+import { findJurisdiction } from "../config.js";
+import { resolveRole } from "../roles.js";
+import { getFacility } from "../registry.js";
 import type { UserRow } from "../models.js";
 
 export const authRouter = Router();
@@ -13,6 +17,99 @@ const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(200),
   password: z.string().min(8).max(200),
 });
+
+const strongPassword = z
+  .string()
+  .min(12, "Password must be at least 12 characters")
+  .max(200)
+  .regex(/[A-Z]/, "Include an uppercase letter")
+  .regex(/[a-z]/, "Include a lowercase letter")
+  .regex(/[0-9]/, "Include a digit")
+  .regex(/[^A-Za-z0-9]/, "Include a symbol");
+
+function whatsappSession(user: UserRow) {
+  const stored = decryptField(user.phone_enc);
+  const digits = stored ? normalizeWhatsAppNumber(stored) : null;
+  return {
+    number: digits ? maskWhatsAppNumber(digits) : null,
+    optIn: Boolean(user.whatsapp_opt_in),
+    /** True when the server holds live WhatsApp Business credentials. */
+    connected: whatsappStatus().configured,
+  };
+}
+
+function sessionUser(user: UserRow) {
+  const resolved = resolveRole(user.role);
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    roleName: resolved.name,
+    baseRole: resolved.baseRole,
+    permissions: resolved.permissions,
+    country: user.country,
+    organisation: user.organisation,
+    facilityId: user.facility_id ?? null,
+    facilityName: user.facility_id ? (getFacility(user.facility_id)?.name ?? null) : null,
+    mfaEnabled: Boolean(user.mfa_enabled),
+    whatsapp: whatsappSession(user),
+  };
+}
+
+const signupSchema = z.object({
+  name: z.string().trim().min(2, "Enter your full name").max(120),
+  email: z.string().trim().toLowerCase().email().max(200),
+  password: strongPassword,
+  consent: z.boolean().refine((v) => v, "Consent to data processing is required"),
+  /** Jurisdiction the patient is filing from; defaults to the platform's US tenant. */
+  country: z
+    .string()
+    .trim()
+    .length(2)
+    .transform((c) => c.toUpperCase())
+    .refine((c) => Boolean(findJurisdiction(c)), "Unsupported jurisdiction")
+    .optional()
+    .default("US"),
+});
+
+/**
+ * Patient self-registration. Accounts created here are always PATIENT scoped:
+ * staff and custom-role accounts remain administrator-provisioned only.
+ */
+authRouter.post(
+  "/signup",
+  createRateLimiter({ bucket: "signup", windowMs: 10 * 60_000, max: 6 }),
+  asyncHandler(async (req, res) => {
+    const body = parseBody(signupSchema, req.body);
+    if (get("SELECT id FROM users WHERE email = ?", body.email)) {
+      throw new HttpError(409, "An account with that email already exists. Sign in instead.");
+    }
+    const id = `USR-${randomCode(8)}`;
+    const now = nowIso();
+    run(
+      "INSERT INTO users (id, email, name, password_hash, role, country, organisation, active, mfa_enabled, consent_at, created_at) VALUES (?, ?, ?, ?, 'PATIENT', ?, NULL, 1, 0, ?, ?)",
+      id,
+      body.email,
+      body.name,
+      await hashPassword(body.password),
+      body.country,
+      now,
+      now,
+    );
+    const user = get<UserRow>("SELECT * FROM users WHERE id = ?", id)!;
+    createSession(user, req, res);
+    audit({
+      actor: { id: user.id, role: "PATIENT" },
+      action: "PATIENT_SIGNUP",
+      entityType: "user",
+      entityId: user.id,
+      ...meta(req),
+      details: { email: user.email, consentAt: now },
+    });
+    res.status(201).json({ user: sessionUser(user) });
+  }),
+);
 
 authRouter.post(
   "/login",
@@ -34,9 +131,7 @@ authRouter.post(
     }
     createSession(user, req, res);
     audit({ actor: { id: user.id, role: user.role }, action: "LOGIN_SUCCESS", entityType: "user", entityId: user.id, ...meta(req), details: {} });
-    res.json({
-      user: { id: user.id, email: user.email, name: user.name, role: user.role, country: user.country, organisation: user.organisation, mfaEnabled: Boolean(user.mfa_enabled) },
-    });
+    res.json({ user: sessionUser(user) });
   }),
 );
 
@@ -90,5 +185,57 @@ authRouter.post(
       details: { sessionsRevoked: true, at: nowIso() },
     });
     res.json({ ok: true, message: "Password updated. All sessions were revoked." });
+  }),
+);
+
+const whatsappSchema = z.object({
+  phone: z.string().trim().max(40).optional().default(""),
+  optIn: z.boolean(),
+});
+
+/**
+ * WhatsApp notification preference for the signed-in user.
+ *
+ * The number is stored encrypted and only ever read back masked. Sending
+ * { optIn: false } stops messages without deleting the number, which is what a
+ * patient replying STOP expects.
+ */
+authRouter.post(
+  "/whatsapp",
+  attachUser,
+  requireAuth,
+  asyncHandler((req, res) => {
+    const body = parseBody(whatsappSchema, req.body);
+    const user = get<UserRow>("SELECT * FROM users WHERE id = ?", req.user!.id)!;
+    const current = decryptField(user.phone_enc);
+
+    if (!body.optIn) {
+      run("UPDATE users SET whatsapp_opt_in = 0 WHERE id = ?", user.id);
+      audit({
+        actor: { id: user.id, role: user.role },
+        action: "WHATSAPP_OPT_OUT",
+        entityType: "user",
+        entityId: user.id,
+        ...meta(req),
+        details: { number: current ? maskWhatsAppNumber(current) : null },
+      });
+      res.json({ ok: true, whatsapp: whatsappSession(get<UserRow>("SELECT * FROM users WHERE id = ?", user.id)!) });
+      return;
+    }
+
+    const digits = normalizeWhatsAppNumber(body.phone ?? "");
+    if (!digits) {
+      throw new HttpError(400, "Enter a valid WhatsApp number with its country code, for example +91 98100 01000.");
+    }
+    run("UPDATE users SET phone_enc = ?, whatsapp_opt_in = 1 WHERE id = ?", encryptField(digits), user.id);
+    audit({
+      actor: { id: user.id, role: user.role },
+      action: "WHATSAPP_OPT_IN",
+      entityType: "user",
+      entityId: user.id,
+      ...meta(req),
+      details: { number: maskWhatsAppNumber(digits), replaced: Boolean(current) },
+    });
+    res.json({ ok: true, whatsapp: whatsappSession(get<UserRow>("SELECT * FROM users WHERE id = ?", user.id)!) });
   }),
 );

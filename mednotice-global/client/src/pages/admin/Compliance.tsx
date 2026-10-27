@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, formatDate } from "../../api";
 import { useAuth } from "../../auth";
-import type { Jurisdiction } from "../../types";
+import type { FacilityDto, Jurisdiction } from "../../types";
 import { Alert, Badge, Card, CardHead, Icon, Spinner } from "../../components/ui";
 
-type FacilityRow = { id: string; name: string; country: string; city: string | null; authority_id: string; status: string; letterheadKeywords: string[] };
 type PhysicianRow = { license_no: string; full_name: string; jurisdiction: string; status: string; expires_at: string | null; facility_id: string | null };
 
-const SAMPLE = `Complainant: Maria Santos, maria.santos@example.com, +1 555 987 6543.
-MRN: AB-99123. Patient was admitted to St. Mary's General Hospital on 2026-10-19.
-Social security number on file: 123-45-6789.`;
+const SAMPLE = `Complainant: Meera Sharma, meera.sharma@example.in, +91 98100 12345.
+MRN: AB-99123. Patient was admitted to AIIMS New Delhi on 2026-10-19.
+Aadhaar on file: 1234 5678 9012. PAN: ABCDE1234F.`;
 
 function maskDemo(text: string): string {
   return text
@@ -17,18 +17,20 @@ function maskDemo(text: string): string {
       const [user, domain] = m.split("@");
       return `${user.slice(0, 1)}${"*".repeat(Math.max(3, user.length - 1))}@${domain.replace(/^[^.]+/, (d) => `${d[0]}***`)}`;
     })
-    .replace(/\b\d{3}-\d{2}-\d{4}\b/g, "***-**-****")
+    .replace(/\b\d{4}\s\d{4}\s\d{4}\b/g, "**** **** ****")
+    .replace(/\b\d{12}\b/g, "************")
+    .replace(/\b[A-Z]{5}[0-9]{4}[A-Z]\b/g, "**********")
     .replace(/(?:\+\d{1,3}[\s-]?)?\d{3}[\s-]?\d{3}[\s-]?\d{4}/g, (m) => `***-***-${m.replace(/\D/g, "").slice(-4)}`)
     .replace(/\b(?:MRN|medical record(?: number)?)[:\s#]*([A-Z0-9-]{4,})\b/gi, "MRN: ***")
-    .replace(/Maria Santos/g, "M*** S*****");
+    .replace(/Meera Sharma/g, "M*** S*****");
 }
 
 export default function AdminCompliance() {
   const { user } = useAuth();
-  const isAdmin = user?.role === "SUPER_ADMIN";
-  const canAudit = isAdmin || user?.role === "SYSTEM_AUDITOR";
+  const isAdmin = user?.baseRole === "SUPER_ADMIN";
+  const canAudit = isAdmin || user?.baseRole === "SYSTEM_AUDITOR";
   const [jurisdictions, setJurisdictions] = useState<Jurisdiction[]>([]);
-  const [facilities, setFacilities] = useState<FacilityRow[]>([]);
+  const [facilities, setFacilities] = useState<FacilityDto[]>([]);
   const [physicians, setPhysicians] = useState<PhysicianRow[]>([]);
   const [chain, setChain] = useState<{ valid: boolean; checked: number; brokenAt: number | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +41,7 @@ export default function AdminCompliance() {
     try {
       const [j, f, p] = await Promise.all([
         api.get<{ jurisdictions: Jurisdiction[] }>("/api/public/jurisdictions"),
-        api.get<{ facilities: FacilityRow[] }>("/api/admin/facilities"),
+        api.get<{ facilities: FacilityDto[] }>("/api/admin/directory/facilities"),
         api.get<{ physicians: PhysicianRow[] }>("/api/admin/physicians"),
       ]);
       setJurisdictions(j.jurisdictions);
@@ -96,7 +98,7 @@ export default function AdminCompliance() {
           ["Encryption at rest", "AES-256-GCM", "Narratives, identifiers and uploaded files are sealed before disk writes."],
           ["Transport", "TLS 1.2+", "Session cookies are HttpOnly/SameSite; mutations enforce same-origin."],
           ["Audit", "Hash chain", "Each record commits to its predecessor; verification replays from genesis."],
-          ["Minimisation", "Field-level", "Cross-border payloads carry masked names, emails, phones and record numbers."],
+          ["Minimisation", "Field-level", "Outbound payloads carry masked names, emails, phones, national IDs and record numbers."],
         ].map(([title, value, body]) => (
           <div className="kpi" key={title}>
             <div className="kpi-label">{title}</div>
@@ -108,7 +110,7 @@ export default function AdminCompliance() {
 
       <Card flush style={{ marginBottom: 18 }}>
         <div style={{ padding: "18px 20px 8px" }}>
-          <CardHead title="Retention & regulatory matrix" sub="Per-jurisdiction windows and citations used by the triage engine" />
+          <CardHead title="Retention & regulatory matrix" sub="Per-jurisdiction retention windows and citations used by the triage engine" />
         </div>
         <div className="table-wrap">
           <table className="data">
@@ -131,16 +133,27 @@ export default function AdminCompliance() {
 
       <div className="grid-2" style={{ marginBottom: 18 }}>
         <Card>
-          <CardHead title="Facility registry" sub={`${facilities.length} registered facilities`} right={<Badge tone="info">Letterhead matching</Badge>} />
+          <CardHead
+            title="Facility registry"
+            sub={`${facilities.length} registered facilities`}
+            right={
+              <div className="row" style={{ gap: 8 }}>
+                <Badge tone="info">Letterhead matching</Badge>
+                <Link className="btn sm ghost" to="/admin/directory">
+                  Manage directory
+                </Link>
+              </div>
+            }
+          />
           <div className="table-wrap">
             <table className="data">
-              <thead><tr><th>Facility</th><th>Authority</th><th>Country</th></tr></thead>
+              <thead><tr><th>Facility</th><th>Authority</th><th>Region</th></tr></thead>
               <tbody>
                 {facilities.map((f) => (
                   <tr key={f.id}>
                     <td><div className="strong">{f.name}</div><div className="cell-sub">{f.city ?? "—"}</div></td>
-                    <td className="small mono">{f.authority_id}</td>
-                    <td><Badge tone="muted">{f.country}</Badge></td>
+                    <td className="small mono">{f.authorityId}</td>
+                    <td><Badge tone="muted">{jurisdictions.flatMap((j) => j.authorities).find((a) => a.id === f.authorityId)?.region ?? "National"}</Badge></td>
                   </tr>
                 ))}
               </tbody>
@@ -177,7 +190,7 @@ export default function AdminCompliance() {
       </div>
 
       <Card>
-        <CardHead title="Cross-border masking preview" sub="Same rules the dispatcher applies to outbound payloads and logs" right={<Badge tone="info"><Icon name="lock" size={11} /> field-level</Badge>} />
+        <CardHead title="Outbound masking preview" sub="Same rules the dispatcher applies to authority payloads and logs" right={<Badge tone="info"><Icon name="lock" size={11} /> field-level</Badge>} />
         <div className="grid-2" style={{ alignItems: "start" }}>
           <div className="field">
             <label htmlFor="mask-input">Raw text</label>
@@ -187,7 +200,7 @@ export default function AdminCompliance() {
           <div className="field">
             <label>Masked for transmission</label>
             <pre className="payload" style={{ minHeight: 150 }}>{maskDemo(sample)}</pre>
-            <span className="hint">Emails, phones, national IDs, MRNs and known names are replaced; narrative structure is preserved.</span>
+            <span className="hint">Emails, phones, Aadhaar, PAN, MRNs and known names are replaced; narrative structure is preserved.</span>
           </div>
         </div>
         <div className="divider" />

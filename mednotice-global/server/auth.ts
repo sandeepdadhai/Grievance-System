@@ -5,6 +5,8 @@ import { SESSION_COOKIE, SESSION_TTL_MS } from "./config.js";
 import { HttpError, meta } from "./http.js";
 import type { Role, UserRow } from "./models.js";
 import { audit } from "./audit.js";
+import { resolveRole, type PermissionKey } from "./roles.js";
+import { getFacility } from "./registry.js";
 
 export type SessionUser = NonNullable<Request["user"]>;
 
@@ -72,13 +74,19 @@ export function attachUser(req: Request, _res: Response, next: NextFunction): vo
     next(new HttpError(403, "Account is deactivated"));
     return;
   }
+  const resolved = resolveRole(row.role);
   req.user = {
     id: row.id,
     email: row.email,
     name: row.name,
     role: row.role,
+    roleName: resolved.name,
+    baseRole: resolved.baseRole,
+    permissions: resolved.permissions,
     country: row.country,
     organisation: row.organisation,
+    facilityId: row.facility_id ?? null,
+    facilityName: row.facility_id ? (getFacility(row.facility_id)?.name ?? null) : null,
   };
   req.sessionId = row.session_id;
   next();
@@ -98,7 +106,7 @@ export function requireRole(...roles: Role[]) {
       next(new HttpError(401, "Authentication required"));
       return;
     }
-    if (!roles.includes(req.user.role)) {
+    if (!roles.includes(req.user.baseRole)) {
       audit({
         actor: { id: req.user.id, role: req.user.role },
         action: "AUTHORIZATION_DENIED",
@@ -108,6 +116,34 @@ export function requireRole(...roles: Role[]) {
         details: { required: roles },
       });
       next(new HttpError(403, "Insufficient permissions"));
+      return;
+    }
+    next();
+  };
+}
+
+/**
+ * Capability gate for endpoints added on top of the legacy role checks.
+ * Custom roles inherit their base role's data scope and receive only the
+ * permissions recorded on their role definition.
+ */
+export function requirePermission(...permissions: PermissionKey[]) {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      next(new HttpError(401, "Authentication required"));
+      return;
+    }
+    const has = req.user.baseRole === "SUPER_ADMIN" || permissions.every((p) => req.user!.permissions.includes(p));
+    if (!has) {
+      audit({
+        actor: { id: req.user.id, role: req.user.role },
+        action: "AUTHORIZATION_DENIED",
+        entityType: "endpoint",
+        entityId: `${req.method} ${req.path}`,
+        ...meta(req),
+        details: { requiredPermissions: permissions, role: req.user.role },
+      });
+      next(new HttpError(403, "Missing permission for this action"));
       return;
     }
     next();

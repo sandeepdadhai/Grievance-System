@@ -1,13 +1,99 @@
-export type Role = "SUPER_ADMIN" | "MINISTRY_REVIEWER" | "HOSPITAL_COMPLIANCE" | "SYSTEM_AUDITOR" | "PATIENT";
+export type BuiltinRole = "SUPER_ADMIN" | "MINISTRY_REVIEWER" | "HOSPITAL_COMPLIANCE" | "SYSTEM_AUDITOR" | "PATIENT";
+export type Role = BuiltinRole;
 export type Priority = "P1" | "P2" | "P3" | "P4";
 
 export type User = {
   id: string;
   email: string;
   name: string;
-  role: Role;
+  /** Stored role key — built-in or administrator-defined. */
+  role: string;
+  roleName?: string;
+  baseRole: BuiltinRole;
+  permissions: string[];
   country: string | null;
   organisation: string | null;
+  /** Facility this account is bound to; null means state-wide scope. */
+  facilityId?: string | null;
+  facilityName?: string | null;
+  /**
+   * WhatsApp notification preference. `number` is always masked, and
+   * `connected` reports whether the server holds live WhatsApp Business
+   * credentials (otherwise messages are simulated into the outbox).
+   */
+  whatsapp?: { number: string | null; optIn: boolean; connected: boolean };
+};
+
+export type PermissionDefinition = {
+  key: string;
+  label: string;
+  group: string;
+  description: string;
+};
+
+export type RoleDefinition = {
+  key: string;
+  name: string;
+  description: string;
+  baseRole: BuiltinRole;
+  permissions: string[];
+  builtin: boolean;
+  userCount: number;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type CommunityPost = {
+  id: string;
+  authorName: string;
+  isGuest: boolean;
+  isMine: boolean;
+  title: string;
+  body: string;
+  topic: string;
+  status: "VISIBLE" | "HIDDEN" | "REMOVED" | string;
+  pinned: boolean;
+  commentCount: number;
+  hiddenComments?: number;
+  editedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CommunityComment = {
+  id: string;
+  postId: string;
+  authorName: string;
+  isGuest: boolean;
+  isMine: boolean;
+  body: string;
+  status: string;
+  editedAt: string | null;
+  createdAt: string;
+};
+
+export type ChatCaseStatus = {
+  id: string;
+  status: string;
+  priority: Priority;
+  verificationStatus: string;
+  category: string;
+  facilityName: string | null;
+  authorityName: string | null;
+  createdAt: string;
+  slaDueAt: string;
+  resolvedAt: string | null;
+  lastEvent: string | null;
+  documents: number;
+};
+
+export type ChatResponse = {
+  reply: string;
+  intent: string;
+  suggestions: Array<{ label: string; href: string }>;
+  emergency?: boolean;
+  caseStatus?: ChatCaseStatus;
+  disclaimer?: string;
 };
 
 export type Authority = {
@@ -36,10 +122,55 @@ export type Jurisdiction = {
 export type Facility = {
   id: string;
   name: string;
-  authority_id: string;
+  authorityId: string;
   country: string;
   city: string | null;
   status: string;
+};
+
+export type AuthorityDto = {
+  id: string;
+  name: string;
+  country: string;
+  region: string;
+  adapter: string;
+  contactEmail: string;
+  webhook: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  facilityCount: number;
+  caseCount: number;
+};
+
+export type FacilityCase = CaseDto & {
+  documentCount: number;
+  pendingDocuments: number;
+  documents: DocumentDto[];
+};
+
+export type FacilityWorkspace = {
+  facility: FacilityDto;
+  counts: {
+    total: number;
+    open: number;
+    awaitingVerification: number;
+    resolved: number;
+    overdue: number;
+  };
+  cases: FacilityCase[];
+};
+
+export type FacilityDto = {
+  id: string;
+  name: string;
+  authorityId: string;
+  country: string;
+  city: string | null;
+  letterheadKeywords: string[];
+  status: string;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 
 export type Finding = {
@@ -129,6 +260,10 @@ export type CaseDto = {
   updatedAt: string;
   slaDueAt: string;
   resolvedAt: string | null;
+  /** Latest status reported by the receiving health authority. */
+  authorityStatus: string | null;
+  authorityStatusAt: string | null;
+  authorityReference: string | null;
   documents?: DocumentDto[];
   documentCount?: number;
 };
@@ -145,6 +280,7 @@ export type CaseDetail = {
     http_status: number | null;
     latency_ms: number | null;
     created_at: string;
+    reference?: string | null;
   }>;
   notifications: Array<{
     id: string;
@@ -157,6 +293,28 @@ export type CaseDetail = {
     created_at: string;
     sent_at: string | null;
   }>;
+  authorityStatus: {
+    status: string | null;
+    checkedAt: string | null;
+    reference: string | null;
+    history: Array<{
+      id: string;
+      case_id: string;
+      transmission_id: string | null;
+      authority_id: string;
+      adapter_code: string;
+      endpoint: string;
+      status: string;
+      remote_status: string | null;
+      remote_reference: string | null;
+      message: string | null;
+      http_status: number | null;
+      latency_ms: number | null;
+      applied: number;
+      simulated: number;
+      checked_at: string;
+    }>;
+  };
   activity: Array<{ ts: string; actor_id: string | null; actor_role: string | null; action: string; details: Record<string, unknown> }>;
   piiVisible: boolean;
 };
@@ -175,6 +333,7 @@ export type Overview = {
   };
   byPriority: Array<{ priority: Priority; n: number }>;
   byCountry: Array<{ country: string; n: number }>;
+  byRegion: Array<{ region: string; n: number }>;
   byCategory: Array<{ category: string; n: number }>;
   byStatus: Array<{ status: string; n: number }>;
   verification: Array<{ verification_status: string; n: number }>;
@@ -183,6 +342,7 @@ export type Overview = {
     id: string;
     patientName: string;
     country: string;
+    region: string | null;
     facilityName: string;
     category: string;
     priority: Priority;
@@ -204,6 +364,8 @@ export type AdapterDto = {
   country: string;
   kind: string;
   endpoint: string;
+  /** Per-adapter endpoint polled for the department's latest case status. */
+  statusEndpoint: string | null;
   authType: string;
   mapping: Record<string, unknown>;
   enabled: boolean;

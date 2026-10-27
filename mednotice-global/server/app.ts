@@ -10,6 +10,12 @@ import { authRouter } from "./routes/auth.js";
 import { casesRouter } from "./routes/cases.js";
 import { documentsRouter } from "./routes/documents.js";
 import { adminRouter } from "./routes/admin.js";
+import { rolesRouter } from "./routes/roles.js";
+import { communityAdminRouter, communityRouter } from "./routes/community.js";
+import { directoryRouter } from "./routes/directory.js";
+import { dispatchRouter } from "./routes/dispatch.js";
+import { communicationsRouter } from "./routes/communications.js";
+import { chatRouter } from "./routes/chat.js";
 import { sinkRouter } from "./routes/sink.js";
 
 export function createApp(): express.Express {
@@ -38,6 +44,13 @@ export function createApp(): express.Express {
   app.use("/api/auth", authRouter);
   app.use("/api/cases", casesRouter);
   app.use("/api/documents", documentsRouter);
+  app.use("/api/chat", chatRouter);
+  app.use("/api/community", communityRouter);
+  app.use("/api/admin/roles", rolesRouter);
+  app.use("/api/admin/community", communityAdminRouter);
+  app.use("/api/admin/directory", directoryRouter);
+  app.use("/api/admin/dispatch", dispatchRouter);
+  app.use("/api/admin/communications", communicationsRouter);
   app.use("/api/admin", adminRouter);
   app.use("/api/_sink", sinkRouter);
 

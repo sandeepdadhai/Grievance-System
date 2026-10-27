@@ -11,10 +11,13 @@ import { assertCaseAccess } from "../access.js";
 import { asyncHandler, createRateLimiter, HttpError, meta, parseBody } from "../http.js";
 import { requireAuth } from "../auth.js";
 import { canSeePii, caseToDto, type CaseRow, type DocumentRow, type UserRow } from "../models.js";
-import { findAuthority, findJurisdiction } from "../config.js";
+import { findJurisdiction } from "../config.js";
+import { findAuthority, getAuthority, getFacility } from "../registry.js";
 import { triage } from "../triage.js";
 import { verifyDocument, bundleStatus } from "../verification/index.js";
 import { transmitCase } from "../routing.js";
+import { listStatusSyncs } from "../authority-status.js";
+import { queueWhatsAppNotice } from "../notifications.js";
 
 export const casesRouter = Router();
 
@@ -67,19 +70,24 @@ casesRouter.post(
 
     const jurisdiction = findJurisdiction(body.country);
     if (!jurisdiction) throw new HttpError(400, "Unsupported jurisdiction");
-    const authorityMatch = findAuthority(body.authorityId);
-    if (!authorityMatch || authorityMatch.jurisdiction.code !== body.country) {
+    const authorityRecord = getAuthority(body.authorityId);
+    if (!authorityRecord || authorityRecord.country !== body.country) {
       throw new HttpError(400, "Selected health authority does not belong to the selected country");
     }
+    if (authorityRecord.status !== "ACTIVE") {
+      throw new HttpError(400, "The selected health authority is not currently accepting grievances");
+    }
+    const authorityMatch = findAuthority(body.authorityId);
+    if (!authorityMatch) throw new HttpError(400, "Selected health authority is not configured");
     if (!jurisdiction.complaintCategories.includes(body.category)) {
       throw new HttpError(400, "Category is not valid for this jurisdiction");
     }
-    const facility = get<{ id: string; name: string; authority_id: string; country: string }>(
-      "SELECT id, name, authority_id, country FROM facilities WHERE id = ?",
-      body.facilityId,
-    );
-    if (!facility || facility.authority_id !== body.authorityId) {
+    const facility = getFacility(body.facilityId);
+    if (!facility || facility.authorityId !== body.authorityId) {
       throw new HttpError(400, "Selected facility is not registered with that health authority");
+    }
+    if (facility.status !== "VERIFIED") {
+      throw new HttpError(400, "Selected facility is not open for new grievances");
     }
     if (!body.consentDataSharing) {
       throw new HttpError(400, "Data-processing consent is required to submit a grievance");
@@ -301,6 +309,9 @@ casesRouter.post(
     }
 
     const fresh = get<CaseRow>("SELECT * FROM cases WHERE id = ?", caseId)!;
+    // The patient's WhatsApp receipt does not depend on authority routing: it is
+    // queued even when the transmission fails, and the queue retries on its own.
+    queueWhatsAppNotice(fresh, "CASE_SUBMITTED");
     const actor = patientUser ? { role: "PATIENT" as const, id: patientUser.id } : { role: "PATIENT" as const, id: "guest" };
     res.status(201).json({
       case: caseToDto(fresh, { ...actor, isOwner: true }, docRows),
@@ -319,7 +330,7 @@ casesRouter.get(
   "/mine",
   requireAuth,
   asyncHandler((req, res) => {
-    if (req.user!.role !== "PATIENT") throw new HttpError(403, "Patient endpoint");
+    if (req.user!.baseRole !== "PATIENT") throw new HttpError(403, "Patient endpoint");
     const rows = all<CaseRow>("SELECT * FROM cases WHERE patient_user_id = ? ORDER BY created_at DESC", req.user!.id);
     const docs = all<DocumentRow>("SELECT * FROM documents WHERE case_id IN (SELECT id FROM cases WHERE patient_user_id = ?)", req.user!.id);
     res.json({
@@ -342,7 +353,7 @@ casesRouter.get(
     if (!row) throw new HttpError(404, "Case not found");
     assertCaseAccess(req, row);
     const documents = all<DocumentRow>("SELECT * FROM documents WHERE case_id = ? ORDER BY uploaded_at", row.id);
-    const dto = caseToDto(row, { role: req.user!.role, id: req.user!.id, isOwner: row.patient_user_id === req.user!.id }, documents);
+    const dto = caseToDto(row, { role: req.user!.baseRole, id: req.user!.id, isOwner: row.patient_user_id === req.user!.id }, documents);
     const reviews = all("SELECT * FROM case_reviews WHERE case_id = ? ORDER BY created_at", row.id);
     const transmissions = all("SELECT * FROM transmissions WHERE case_id = ? ORDER BY created_at DESC", row.id);
     const notifications = all("SELECT id, channel, target, subject, status, attempts, last_error, created_at, sent_at FROM notifications WHERE case_id = ? ORDER BY created_at", row.id);
@@ -355,8 +366,14 @@ casesRouter.get(
       reviews,
       transmissions,
       notifications,
+      authorityStatus: {
+        status: row.authority_status ?? null,
+        checkedAt: row.authority_status_at ?? null,
+        reference: row.authority_reference ?? null,
+        history: listStatusSyncs(row.id, 20),
+      },
       activity: activity.map((a) => ({ ...a, details: JSON.parse(a.details_json) })),
-      piiVisible: canSeePii({ role: req.user!.role, id: req.user!.id, isOwner: row.patient_user_id === req.user!.id }),
+      piiVisible: canSeePii({ role: req.user!.baseRole, id: req.user!.id, isOwner: row.patient_user_id === req.user!.id }),
     });
   }),
 );
