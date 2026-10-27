@@ -9,6 +9,22 @@ Runs offline with synthetic data — no cloud services or API keys required.
 
 ---
 
+## Feature set
+
+MedNotice Global now carries the same workflows as MedNotice India, applied to
+all six configured tenants (US, DE, GB, IN, SG, BR):
+
+* multi-jurisdiction intake with per-country SLA matrices and complaint categories
+* document forensics (PDF/image/DICOM), field extraction and licence registry checks
+* clinical triage with English, German, Portuguese and Hindi critical-term detection
+* adapter routing (FHIR R4, HL7 v2, REST envelopes, SOAP 1.2) with retry, re-route and status polling
+* authority directory and facility registry managed at runtime, per-facility workspaces
+* patient self-registration with consent capture, patient portal and WhatsApp opt-in
+* community forum with guest and patient posts plus moderation
+* custom roles built from a capability catalogue, with facility-scoped data access
+* communications desk, unified audit trail and tamper-evident hash chain
+* in-app assistant that answers questions and looks up a case without leaking identifiers
+
 ## Quick start
 
 ```bash

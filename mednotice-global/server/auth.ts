@@ -35,7 +35,12 @@ export function createSession(user: UserRow, req: Request, res: Response): strin
     nowIso(),
   );
   run("UPDATE users SET last_login_at = ? WHERE id = ?", nowIso(), user.id);
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  // Only mark the cookie Secure when the request really arrived over TLS. A
+  // plain-HTTP deployment (the EC2 default, TLS at the edge) would otherwise
+  // get its session cookie dropped by the browser and sign-in would silently
+  // fail after a successful login response.
+  const forwardedProto = String(req.headers["x-forwarded-proto"] ?? "").split(",")[0].trim().toLowerCase();
+  const secure = req.secure || forwardedProto === "https" ? "; Secure" : "";
   res.setHeader(
     "Set-Cookie",
     `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}${secure}`,

@@ -1,4 +1,8 @@
 #!/bin/bash
+# Bootstrap for the MedNotice Global instance. The application source is copied
+# over SSH after boot (the repository is not readable from this account), so
+# this script installs the runtime, prepares the data volume and wires the
+# systemd unit and reverse proxy.
 set -euo pipefail
 
 # 1 GiB swap: t3.micro has 1 GiB RAM and the Vite/tsc build needs headroom.
@@ -13,31 +17,12 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y git curl jq ca-certificates gnupg software-properties-common
+apt-get install -y git curl jq rsync ca-certificates gnupg software-properties-common
 
 # Node 24 (node:sqlite needs >= 22.5)
 curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
 apt-get install -y nodejs
 { echo "node $(node -v)"; echo "npm $(npm -v)"; } > /var/log/mednotice-node.txt 2>&1
-
-# ------------------------------------------------------------------ app source
-APP=/srv/mednotice
-mkdir -p "$APP"
-cd "$APP"
-if [ -d Grievance-System/.git ]; then
-  cd Grievance-System
-  git fetch --quiet --all || true
-  git checkout -q main
-  git pull --quiet --ff-only || true
-else
-  git clone --quiet https://github.com/sandeepdadhai/Grievance-System.git
-  cd Grievance-System
-  git checkout -q main
-fi
-cd mednotice-global
-
-npm ci --no-audit --no-fund
-npm run build
 
 # ------------------------------------------------------------- persistent data
 mkdir -p /var/lib/mednotice-global
@@ -60,6 +45,9 @@ for _ in $(seq 1 15); do
 done
 chmod 700 /var/lib/mednotice-global
 
+# ---------------------------------------------------------------- app layout
+mkdir -p /srv/mednotice/mednotice-global
+
 # ---------------------------------------------------------------- runtime env
 PUBLIC_IP="$(curl -fsS -m 5 http://169.254.169.254/latest/meta-data/public-ipv4 || true)"
 cat > /etc/mednotice-global.env <<ENV
@@ -81,7 +69,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/srv/mednotice/Grievance-System/mednotice-global
+WorkingDirectory=/srv/mednotice/mednotice-global
 EnvironmentFile=/etc/mednotice-global.env
 ExecStart=/usr/bin/node dist/server/index.js
 Restart=on-failure
@@ -92,7 +80,7 @@ WantedBy=multi-user.target
 UNIT
 
 systemctl daemon-reload
-systemctl enable --now mednotice-global
+systemctl enable mednotice-global >/dev/null 2>&1 || true
 
 # --------------------------------------------- reverse proxy (HTTP for now)
 apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
@@ -110,12 +98,4 @@ CADDY
 systemctl enable caddy >/dev/null 2>&1 || true
 systemctl restart caddy >/dev/null 2>&1 || true
 
-# ------------------------------------------------------------ readiness gate
-for i in $(seq 1 180); do
-  if curl -fsS http://127.0.0.1:4200/api/health 2>/dev/null | grep -q '"valid":true'; then
-    echo "app healthy after $((i*2))s"
-    break
-  fi
-  sleep 2
-done
-curl -fsS http://127.0.0.1:4200/api/health || true
+echo "bootstrap complete" > /var/log/mednotice-bootstrap.txt

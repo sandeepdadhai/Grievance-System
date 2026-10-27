@@ -6,3 +6,12 @@ data/
 *.log
 .DS_Store
 artifacts/
+
+# terraform local state / provider cache (never commit these)
+infra/.terraform/
+infra/.terraform.lock.hcl
+infra/*.tfstate
+infra/*.tfstate.*
+infra/tfplan
+infra/*.tfplan
+infra/*.pem

@@ -3,6 +3,10 @@
 Live demo (deployed from this directory): **http://13.238.116.94/** — Sydney,
 `t3.micro`, no custom domain, plain HTTP.
 
+MedNotice Global runs on its own instance (**http://54.206.39.199/**,
+`i-085640db7a6f9ead8`). See `mednotice-global/infra/README.md` for that stack,
+its redeploy steps and the free-tier limits of running both at once.
+
 ```bash
 set -a; . ../.env; set +a          # AWS_ACCESS_KEY_ID / SECRET / AWS_DEFAULT_REGION
 export PATH="/tmp/bin:$PATH"       # terraform 1.9.8 installed under /tmp/bin
