@@ -3,9 +3,57 @@
 Live demo (deployed from this directory): **http://13.238.116.94/** — Sydney,
 `t3.micro`, no custom domain, plain HTTP.
 
-MedNotice Global runs on its own instance (**http://54.206.39.199/**,
-`i-085640db7a6f9ead8`). See `mednotice-global/infra/README.md` for that stack,
-its redeploy steps and the free-tier limits of running both at once.
+The MedNotice Global instance (`i-085640db7a6f9ead8`) was **terminated on
+2026-10-28**; its code stays in the repository but nothing is deployed for it.
+Only this instance remains, so the free tier has room for a 12-hour day.
+
+## Power schedule (11:00 → 23:00 Hong Kong time)
+
+The instance stops itself every night and is started again each morning, so it
+runs roughly 365 h a month and stays inside the 750 h free tier.
+
+| What | Where | When |
+| --- | --- | --- |
+| Start | `.github/workflows/ec2-schedule.yml` (`aws ec2 start-instances`) | `0 3 * * *` UTC = 11:00 HKT |
+| Stop | same workflow (`aws ec2 stop-instances`) | `0 15 * * *` UTC = 23:00 HKT |
+| Stop backstop | `/etc/cron.d/mednotice-shutdown` on the instance | 23:05 HKT, in case the workflow fails |
+
+This account's credentials **cannot** create AWS-native schedules:
+`scheduler:*`, `events:PutRule`, `lambda:*`, `autoscaling:*` and `iam:PassRole`
+are all denied (verified 2026-10-28). The GitHub Actions workflow is therefore
+the external clock — it needs two repository secrets under *Settings → Secrets
+and variables → Actions*: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`. Until
+they exist the scheduled job exits without doing anything and the instance stays
+asleep after its nightly stop.
+
+Start it by hand at any time:
+
+```bash
+aws ec2 start-instances --region ap-southeast-2 --instance-ids i-09591a814f5600b70
+aws ec2 describe-instances --region ap-southeast-2 --instance-ids i-09591a814f5600b70 \
+  --query 'Reservations[0].Instances[0].PublicIpAddress' --output text
+```
+
+Note there is **no Elastic IP** (`ec2:AllocateAddress` is denied), so the public
+address changes whenever the instance is stopped and started. Resolve it with
+the command above; `PUBLIC_URL` in `/etc/mednotice.env` should be updated to
+match if you want WhatsApp links to stay valid.
+
+## Patient identity: SMS OTP and Aadhaar
+
+The patient-facing identity features run in **simulation** until gateway
+credentials exist, exactly like the WhatsApp channel:
+
+| Feature | Endpoint | Behaviour now |
+| --- | --- | --- |
+| SMS one-time-password login | `POST /api/auth/otp/request`, `POST /api/auth/otp/verify` | 6-digit code, 5-minute TTL, 5 attempts; written to `/var/lib/mednotice/outbox/sms-*.txt` and echoed as `devCode` because `SMS_API_URL`/`SMS_API_KEY` are unset |
+| Aadhaar verification | `POST /api/auth/aadhaar/request`, `POST /api/auth/aadhaar/verify` | 12-digit number + Verhoeff checksum, then an OTP to the mobile number on the account; stored AES-256-GCM encrypted with only `XXXX XXXX 1234` ever displayed |
+| Aadhaar gate on submissions | `POST /api/cases` | A signed-in patient without a verified Aadhaar gets `403` with `details.code = AADHAAR_REQUIRED`; guest submissions stay anonymous and are unaffected |
+
+The demo patient accounts are seeded with a mobile number and a verified dummy
+Aadhaar (`USR-PATIENT` → `9810000123`, `XXXX XXXX 2644`). To send real SMS, put
+`SMS_PROVIDER=generic`, `SMS_API_URL`, `SMS_API_KEY` (or the `SMS_TWILIO_*` trio)
+in `/etc/mednotice.env` and restart; see `.env.example`.
 
 ```bash
 set -a; . ../.env; set +a          # AWS_ACCESS_KEY_ID / SECRET / AWS_DEFAULT_REGION

@@ -5,7 +5,58 @@ import { findJurisdiction } from "./config.js";
 import { findAuthority, getFacility, seedAuthorities } from "./registry.js";
 import { triage } from "./triage.js";
 import { seedRoles } from "./roles.js";
+import { hashMobile } from "./otp.js";
+import { hashAadhaar, maskAadhaar } from "./aadhaar.js";
 import type { Finding } from "./verification/types.js";
+
+/**
+ * Synthetic identities attached to the demo patient accounts: the mobile number
+ * is the one SMS one-time passwords are delivered to, and the Aadhaar numbers
+ * are Verhoeff-valid placeholders so the identity gate can be demonstrated.
+ */
+const DEMO_IDENTITIES = [
+  { id: "USR-PATIENT", phone: "919810000123", aadhaar: "482915732644" },
+  { id: "USR-PATIENT-HI", phone: "919810000124", aadhaar: "673048251985" },
+];
+
+/**
+ * Attach the demo identities to an already-seeded database.
+ *
+ * `seed()` short-circuits when the database holds users, so this runs on every
+ * boot and only fills columns that are still empty — a real patient who has
+ * since verified their own number or Aadhaar is never overwritten.
+ */
+function seedDemoIdentities(): void {
+  for (const identity of DEMO_IDENTITIES) {
+    const row = get<{ phone_hash: string | null; aadhaar_hash: string | null }>(
+      "SELECT phone_hash, aadhaar_hash FROM users WHERE id = ?",
+      identity.id,
+    );
+    if (!row) continue;
+    // The encrypted number, its lookup hash and the verified timestamp are one
+    // unit: writing only the hash would leave the account answering codes for a
+    // number it does not display. Sync all three together or none.
+    if (!row.phone_hash) {
+      run(
+        "UPDATE users SET phone_enc = ?, phone_hash = ?, phone_verified_at = ? WHERE id = ?",
+        encryptField(identity.phone),
+        hashMobile(identity.phone),
+        nowIso(),
+        identity.id,
+      );
+    }
+    if (!row.aadhaar_hash) {
+      run(
+        "UPDATE users SET aadhaar_enc = ?, aadhaar_hash = ?, aadhaar_masked = ?, aadhaar_verified_at = ? WHERE id = ?",
+        encryptField(identity.aadhaar),
+        hashAadhaar(identity.aadhaar),
+        maskAadhaar(identity.aadhaar),
+        nowIso(),
+        identity.id,
+      );
+    }
+  }
+}
 
 type SeedUser = {
   id: string;
@@ -509,6 +560,9 @@ export async function seed(): Promise<void> {
   seedAuthorities();
   await seedFacilityAccounts();
   if (count("SELECT COUNT(*) AS n FROM users") > 0) {
+    // Existing deployment: only attach the demo identities that are still
+    // missing, then leave the rest of the data untouched.
+    seedDemoIdentities();
     seedCommunity();
     return;
   }
@@ -526,6 +580,8 @@ export async function seed(): Promise<void> {
       nowIso(),
     );
   }
+
+  seedDemoIdentities();
 
   for (const f of FACILITIES) {
     run(

@@ -22,6 +22,16 @@ export type User = {
    * credentials (otherwise messages are simulated into the outbox).
    */
   whatsapp?: { number: string | null; optIn: boolean; connected: boolean };
+  /** Mobile number on file (masked) used for SMS one-time-password sign-in. */
+  phone?: string | null;
+  phoneVerified?: boolean;
+  /** True when the server holds live SMS gateway credentials. */
+  sms?: { connected: boolean; simulated: boolean; provider: string };
+  /**
+   * Aadhaar identity. `verified` gates patient submissions; `masked` is the
+   * only form of the number the browser ever sees.
+   */
+  aadhaar?: { verified: boolean; masked: string | null; verifiedAt: string | null; required: boolean };
 };
 
 export type PermissionDefinition = {

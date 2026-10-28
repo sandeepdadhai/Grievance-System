@@ -115,6 +115,26 @@ test("whatsapp channel", async (t) => {
     assert.equal(stored?.phone_enc.includes("9810001000"), false, "the number is not stored in clear text");
   });
 
+  await t.test("the patient verifies Aadhaar, which patient submissions now require", async () => {
+    const requested = await fetch(`${base}/api/auth/aadhaar/request`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: patientCookie },
+      body: JSON.stringify({ aadhaar: "902147386531" }),
+    });
+    const requestBody = await requested.json();
+    assert.equal(requested.status, 200, JSON.stringify(requestBody));
+    assert.equal(requestBody.sentTo, "********1000", "the code goes to the number on the account");
+
+    const verified = await fetch(`${base}/api/auth/aadhaar/verify`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: patientCookie },
+      body: JSON.stringify({ challengeId: requestBody.challengeId, code: requestBody.devCode }),
+    });
+    const verifyBody = await verified.json();
+    assert.equal(verified.status, 200, JSON.stringify(verifyBody));
+    assert.equal(verifyBody.user.aadhaar.verified, true);
+  });
+
   await t.test("submitting a case queues a WhatsApp receipt for the patient", async () => {
     const res = await fetch(`${base}/api/cases`, { method: "POST", body: caseForm("Discharged without a discharge summary after chest pain treatment."), headers: { cookie: patientCookie } });
     const body = await res.json();

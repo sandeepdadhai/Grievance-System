@@ -1,0 +1,94 @@
+name: MedNotice India EC2 power schedule
+
+# Starts the MedNotice India instance at 11:00 and stops it at 23:00 Hong Kong
+# time (UTC+8), so it runs ~12 h a day and stays inside the EC2 free tier.
+#
+# GitHub Actions cron is always UTC, so:
+#   03:00 UTC = 11:00 HKT  -> start
+#   15:00 UTC = 23:00 HKT  -> stop
+#
+# The AWS credentials for this account cannot create EventBridge schedules
+# (scheduler:*, events:*, iam:PassRole are all denied), so this workflow is the
+# external clock. It needs two repository secrets — Settings -> Secrets and
+# variables -> Actions:
+#   AWS_ACCESS_KEY_ID
+#   AWS_SECRET_ACCESS_KEY
+# The scheduled job is a no-op until they exist (see the guard step).
+#
+# The instance also stops itself from cron at 23:05 HKT as a backstop, so a
+# failed stop can never leave it running overnight.
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # 11:00 Asia/Hong_Kong — start
+    - cron: "0 15 * * *"  # 23:00 Asia/Hong_Kong — stop
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Power action"
+        required: true
+        default: start
+        type: choice
+        options: [start, stop]
+
+env:
+  AWS_REGION: ap-southeast-2
+  INSTANCE_ID: i-09591a814f5600b70
+
+jobs:
+  power:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decide the action
+        id: decide
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "action=${{ inputs.action }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 3 * * *" ]; then
+            echo "action=start" >> "$GITHUB_OUTPUT"
+          else
+            echo "action=stop" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip when the AWS secrets are missing
+        id: guard
+        env:
+          KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "AWS_ACCESS_KEY_ID secret is not set — nothing to do."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure AWS credentials
+        if: steps.guard.outputs.ready == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Start or stop the instance
+        if: steps.guard.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          STATE=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
+            --query 'Reservations[0].Instances[0].State.Name' --output text)
+          echo "Current state: $STATE"
+          if [ "${{ steps.decide.outputs.action }}" = "start" ]; then
+            if [ "$STATE" = "running" ]; then echo "Already running."; exit 0; fi
+            aws ec2 start-instances --instance-ids "$INSTANCE_ID"
+          else
+            if [ "$STATE" = "stopped" ]; then echo "Already stopped."; exit 0; fi
+            aws ec2 stop-instances --instance-ids "$INSTANCE_ID"
+          fi
+
+      - name: Report the public address after a start
+        if: steps.guard.outputs.ready == 'true' && steps.decide.outputs.action == 'start'
+        run: |
+          aws ec2 wait instance-running --instance-ids "$INSTANCE_ID"
+          IP=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+          echo "MedNotice India is up at http://$IP/" >> "$GITHUB_STEP_SUMMARY"

@@ -6,7 +6,7 @@ import { Alert, Icon } from "../components/ui";
 export default function Signup() {
   const { signup } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "", phone: "" });
   const [consent, setConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -31,7 +31,7 @@ export default function Signup() {
     }
     setBusy(true);
     try {
-      await signup({ name: form.name, email: form.email, password: form.password });
+      await signup({ name: form.name, email: form.email, password: form.password, phone: form.phone || undefined });
       navigate("/portal", { replace: true });
     } catch (err) {
       setError((err as Error).message);
@@ -85,6 +85,11 @@ export default function Signup() {
             <div className="field">
               <label htmlFor="email">Email address</label>
               <input id="email" className="input" type="email" autoComplete="username" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="you@example.com" required />
+            </div>
+            <div className="field">
+              <label htmlFor="phone">Mobile number <span className="faint">(for OTP sign-in and Aadhaar)</span></label>
+              <input id="phone" className="input" inputMode="tel" autoComplete="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+91 98100 01000" />
+              <span className="hint">Optional, but it is the only way to sign in with a one-time password and to verify your Aadhaar.</span>
             </div>
             <div className="field">
               <label htmlFor="password">Password</label>

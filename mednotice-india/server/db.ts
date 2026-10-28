@@ -315,6 +315,36 @@ ensureColumn("users", "whatsapp_opt_in", "INTEGER NOT NULL DEFAULT 0");
 /** Queue payload for channels that need structured fields (WhatsApp templates). */
 ensureColumn("notifications", "meta_json", "TEXT");
 ensureColumn("notifications", "provider_ref", "TEXT");
+/** Mobile login: deterministic lookup hash plus the moment the number was proven. */
+ensureColumn("users", "phone_hash", "TEXT");
+ensureColumn("users", "phone_verified_at", "TEXT");
+/** Verified Aadhaar identity (encrypted number, lookup hash and masked display form). */
+ensureColumn("users", "aadhaar_enc", "TEXT");
+ensureColumn("users", "aadhaar_hash", "TEXT");
+ensureColumn("users", "aadhaar_masked", "TEXT");
+ensureColumn("users", "aadhaar_verified_at", "TEXT");
+
+db.exec(`
+CREATE INDEX IF NOT EXISTS idx_users_phone_hash ON users(phone_hash);
+CREATE INDEX IF NOT EXISTS idx_users_aadhaar_hash ON users(aadhaar_hash);
+
+CREATE TABLE IF NOT EXISTS otp_challenges (
+  id TEXT PRIMARY KEY,
+  purpose TEXT NOT NULL,
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+  phone_hash TEXT NOT NULL,
+  phone_enc TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  payload_enc TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 5,
+  expires_at TEXT NOT NULL,
+  consumed_at TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_otp_lookup ON otp_challenges(purpose, phone_hash, created_at);
+`);
 
 export function nowIso(): string {
   return new Date().toISOString();

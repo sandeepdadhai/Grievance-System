@@ -49,6 +49,39 @@ export const WHATSAPP_SIMULATE = process.env.WHATSAPP_SIMULATE === "1";
 /** Public origin used in message links; falls back to a relative path. */
 export const PUBLIC_URL = (process.env.PUBLIC_URL ?? "").replace(/\/+$/, "");
 
+/**
+ * SMS gateway — one-time passwords for patient mobile login and Aadhaar
+ * verification.
+ *
+ * SMS_PROVIDER=generic posts {to, message, sender} to SMS_API_URL with a bearer
+ * token from SMS_API_KEY (the contract used by MSG91, Kaleyra, Gupshup and
+ * similar Indian aggregators). SMS_PROVIDER=twilio uses the Twilio Messages API.
+ * With no credentials, or SMS_SIMULATE=1, messages are written to
+ * $DATA_DIR/outbox and reported as simulated, so the OTP flow stays fully
+ * demonstrable without a paid gateway.
+ */
+export const SMS_ENABLED = process.env.SMS_ENABLED !== "0";
+export const SMS_PROVIDER = (process.env.SMS_PROVIDER ?? "generic").toLowerCase();
+export const SMS_API_URL = process.env.SMS_API_URL ?? "";
+export const SMS_API_KEY = process.env.SMS_API_KEY ?? "";
+export const SMS_SENDER_ID = process.env.SMS_SENDER_ID ?? "MEDNOT";
+export const SMS_TWILIO_SID = process.env.SMS_TWILIO_SID ?? "";
+export const SMS_TWILIO_TOKEN = process.env.SMS_TWILIO_TOKEN ?? "";
+export const SMS_TWILIO_FROM = process.env.SMS_TWILIO_FROM ?? "";
+export const SMS_SIMULATE = process.env.SMS_SIMULATE === "1";
+/** Country code assumed for numbers entered without one (India by default). */
+export const SMS_DEFAULT_COUNTRY = process.env.SMS_DEFAULT_COUNTRY ?? "91";
+/** One-time password lifetime in seconds. */
+export const OTP_TTL_SECONDS = Math.max(60, Number(process.env.OTP_TTL_SECONDS ?? 300));
+/** Wrong-code attempts allowed before a challenge is burnt. */
+export const OTP_MAX_ATTEMPTS = Math.max(3, Number(process.env.OTP_MAX_ATTEMPTS ?? 5));
+export const OTP_LENGTH = 6;
+/**
+ * A verified Aadhaar is required before a patient account may file a grievance.
+ * Guests who file anonymously are exempt; AADHAAR_REQUIRED=0 relaxes the gate.
+ */
+export const AADHAAR_REQUIRED = process.env.AADHAAR_REQUIRED !== "0";
+
 for (const dir of [DATA_DIR, STORAGE_DIR, OUTBOX_DIR]) {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 }

@@ -2,11 +2,24 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { api } from "./api";
 import type { User } from "./types";
 
+/** Response of the SMS challenge endpoints. `devCode` is only set in simulation. */
+export type OtpChallenge = {
+  challengeId: string;
+  expiresAt: string;
+  masked: string;
+  simulated: boolean;
+  devCode: string | null;
+};
+
 type AuthState = {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<User>;
-  signup: (input: { name: string; email: string; password: string }) => Promise<User>;
+  signup: (input: { name: string; email: string; password: string; phone?: string }) => Promise<User>;
+  /** Ask the server to text a one-time password to a patient's mobile number. */
+  startOtp: (phone: string) => Promise<OtpChallenge>;
+  /** Exchange a valid one-time password for a session. */
+  loginWithOtp: (challengeId: string, code: string) => Promise<User>;
   logout: () => Promise<void>;
   refresh: () => Promise<User | null>;
 };
@@ -40,8 +53,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return next;
   }, []);
 
-  const signup = useCallback(async (input: { name: string; email: string; password: string }) => {
+  const signup = useCallback(async (input: { name: string; email: string; password: string; phone?: string }) => {
     const { user: next } = await api.post<{ user: User }>("/api/auth/signup", { ...input, consent: true });
+    setUser(next);
+    return next;
+  }, []);
+
+  const startOtp = useCallback(async (phone: string) => {
+    return api.post<OtpChallenge>("/api/auth/otp/request", { phone });
+  }, []);
+
+  const loginWithOtp = useCallback(async (challengeId: string, code: string) => {
+    const { user: next } = await api.post<{ user: User }>("/api/auth/otp/verify", { challengeId, code });
     setUser(next);
     return next;
   }, []);
@@ -51,7 +74,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  const value = useMemo(() => ({ user, loading, login, signup, logout, refresh }), [user, loading, login, signup, logout, refresh]);
+  const value = useMemo(
+    () => ({ user, loading, login, signup, startOtp, loginWithOtp, logout, refresh }),
+    [user, loading, login, signup, startOtp, loginWithOtp, logout, refresh],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

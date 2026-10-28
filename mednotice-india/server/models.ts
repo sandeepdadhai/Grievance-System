@@ -23,6 +23,15 @@ export type UserRow = {
   phone_enc: string | null;
   /** 1 once the user explicitly asked for WhatsApp updates. */
   whatsapp_opt_in: number | null;
+  /** Deterministic lookup hash of the mobile number used for OTP login. */
+  phone_hash?: string | null;
+  /** Set once a one-time password proved control of the mobile number. */
+  phone_verified_at?: string | null;
+  /** Verified Aadhaar (AES-256-GCM encrypted), lookup hash and masked display form. */
+  aadhaar_enc?: string | null;
+  aadhaar_hash?: string | null;
+  aadhaar_masked?: string | null;
+  aadhaar_verified_at?: string | null;
 };
 
 export type CaseRow = {

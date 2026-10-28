@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useAuth } from "../auth";
+import { useAuth, type OtpChallenge } from "../auth";
 import { Alert, Icon } from "../components/ui";
 
 const DEMOS = [
@@ -13,12 +13,21 @@ const DEMOS = [
   { email: "patient@demo.in", password: "Patient!2345", label: "Patient", org: "India · demo patient" },
 ];
 
+/** Mobile number on the demo patient account, for the OTP sign-in walkthrough. */
+const DEMO_MOBILE = "9810000123";
+
+type Mode = "password" | "otp";
+
 export default function Login() {
-  const { login, user } = useAuth();
+  const { login, startOtp, loginWithOtp, user } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const [mode, setMode] = useState<Mode>("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [challenge, setChallenge] = useState<OtpChallenge | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -45,9 +54,40 @@ export default function Login() {
     }
   }
 
-  function onSubmit(e: FormEvent) {
+  async function sendCode(e: FormEvent) {
     e.preventDefault();
-    void signIn(email, password);
+    setBusy(true);
+    setError(null);
+    try {
+      setChallenge(await startOtp(phone));
+      setCode("");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verifyCode(e: FormEvent) {
+    e.preventDefault();
+    if (!challenge) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await loginWithOtp(challenge.challengeId, code);
+      navigate(destination(next.baseRole), { replace: true });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function switchMode(next: Mode) {
+    setMode(next);
+    setError(null);
+    setChallenge(null);
+    setCode("");
   }
 
   return (
@@ -86,20 +126,109 @@ export default function Login() {
         <div className="auth-card fade-in">
           <h1>Sign in</h1>
           <p>Staff console and patient case tracking.</p>
-          {error && <Alert tone="error">{error}</Alert>}
-          <form onSubmit={onSubmit}>
-            <div className="field">
-              <label htmlFor="email">Email address</label>
-              <input id="email" className="input" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@organisation.org" required />
-            </div>
-            <div className="field">
-              <label htmlFor="password">Password</label>
-              <input id="password" className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••••" required />
-            </div>
-            <button className="btn primary block" disabled={busy} type="submit">
-              {busy ? <span className="spinner" /> : "Sign in"}
+
+          <div className="row" style={{ gap: 8, marginBottom: 16 }}>
+            <button
+              type="button"
+              className={`btn sm ${mode === "password" ? "primary" : "ghost"}`}
+              onClick={() => switchMode("password")}
+            >
+              Email &amp; password
             </button>
-          </form>
+            <button
+              type="button"
+              className={`btn sm ${mode === "otp" ? "primary" : "ghost"}`}
+              onClick={() => switchMode("otp")}
+            >
+              Mobile OTP
+            </button>
+          </div>
+
+          {error && <Alert tone="error">{error}</Alert>}
+
+          {mode === "password" ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void signIn(email, password);
+              }}
+            >
+              <div className="field">
+                <label htmlFor="email">Email address</label>
+                <input id="email" className="input" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@organisation.org" required />
+              </div>
+              <div className="field">
+                <label htmlFor="password">Password</label>
+                <input id="password" className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••••" required />
+              </div>
+              <button className="btn primary block" disabled={busy} type="submit">
+                {busy ? <span className="spinner" /> : "Sign in"}
+              </button>
+            </form>
+          ) : challenge ? (
+            <form onSubmit={verifyCode}>
+              <p className="small muted" style={{ marginTop: 0 }}>
+                We sent a six-digit code to <strong className="mono">{challenge.masked}</strong>. It expires in five minutes and can
+                be used once.
+              </p>
+              {challenge.devCode && (
+                <Alert tone="warn">
+                  SMS gateway not configured — simulation mode. Your code is <strong className="mono">{challenge.devCode}</strong>.
+                </Alert>
+              )}
+              <div className="field">
+                <label htmlFor="otp-code">One-time password</label>
+                <input
+                  id="otp-code"
+                  className="input"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="123456"
+                  maxLength={8}
+                  required
+                />
+              </div>
+              <button className="btn primary block" disabled={busy || code.length < 4} type="submit">
+                {busy ? <span className="spinner" /> : "Verify and sign in"}
+              </button>
+              <button
+                className="btn ghost block"
+                style={{ marginTop: 8 }}
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setChallenge(null);
+                  setCode("");
+                }}
+              >
+                Use a different number
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={sendCode}>
+              <div className="field">
+                <label htmlFor="otp-phone">Registered mobile number</label>
+                <input
+                  id="otp-phone"
+                  className="input"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+91 98100 01000"
+                  required
+                />
+                <span className="hint">
+                  Patients sign in with the number saved on their account. No account yet? <Link to="/signup">Create one</Link>.
+                </span>
+              </div>
+              <button className="btn primary block" disabled={busy} type="submit">
+                {busy ? <span className="spinner" /> : "Send one-time password"}
+              </button>
+            </form>
+          )}
 
           <div className="divider" />
           <div className="label" style={{ marginBottom: 8 }}>Demo accounts — one click sign in</div>
@@ -118,6 +247,10 @@ export default function Login() {
               </button>
             ))}
           </div>
+          <p className="tiny faint" style={{ marginTop: 10 }}>
+            Mobile OTP demo: number <span className="mono">{DEMO_MOBILE}</span> on the demo patient account. In simulation the code is
+            written to the server outbox and shown on the next screen.
+          </p>
           <p className="tiny faint" style={{ marginTop: 16 }}>
             New patient? <Link to="/signup">Create an account</Link> to keep every case in one workspace. Prefer to stay anonymous? <Link to="/submit">File a grievance as a guest</Link> — you will receive a case reference and access code.
           </p>

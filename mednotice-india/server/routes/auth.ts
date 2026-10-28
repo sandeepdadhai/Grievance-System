@@ -2,8 +2,20 @@ import { Router } from "express";
 import { z } from "zod";
 import { get, nowIso, run } from "../db.js";
 import { decryptField, encryptField, hashPassword, randomCode, verifyPassword } from "../crypto.js";
+import { OTP_TTL_SECONDS } from "../config.js";
+import { checkAadhaar, hashAadhaar, maskAadhaar } from "../aadhaar.js";
+import {
+  createChallenge,
+  findUserIdByMobile,
+  hashMobile,
+  maskMobile,
+  normaliseMobile,
+  recentChallengeCount,
+  verifyChallenge,
+} from "../otp.js";
+import { smsStatus } from "../sms.js";
 import { maskWhatsAppNumber, normalizeWhatsAppNumber, whatsappStatus } from "../whatsapp.js";
-import { attachUser, createSession, destroySession, requireAuth } from "../auth.js";
+import { attachUser, createSession, destroySession, identityFor, requireAuth } from "../auth.js";
 import { audit } from "../audit.js";
 import { asyncHandler, createRateLimiter, HttpError, meta, parseBody } from "../http.js";
 import { resolveRole } from "../roles.js";
@@ -53,6 +65,7 @@ function sessionUser(user: UserRow) {
     facilityName: user.facility_id ? (getFacility(user.facility_id)?.name ?? null) : null,
     mfaEnabled: Boolean(user.mfa_enabled),
     whatsapp: whatsappSession(user),
+    ...identityFor(user),
   };
 }
 
@@ -60,6 +73,8 @@ const signupSchema = z.object({
   name: z.string().trim().min(2, "Enter your full name").max(120),
   email: z.string().trim().toLowerCase().email().max(200),
   password: strongPassword,
+  /** Mobile number, optional at signup but needed for OTP sign-in and Aadhaar. */
+  phone: z.string().trim().max(20).optional().default(""),
   consent: z.boolean().refine((v) => v, "Consent to data processing is required"),
 });
 
@@ -75,15 +90,24 @@ authRouter.post(
     if (get("SELECT id FROM users WHERE email = ?", body.email)) {
       throw new HttpError(409, "An account with that email already exists. Sign in instead.");
     }
+    const mobile = body.phone ? normaliseMobile(body.phone) : null;
+    if (body.phone && !mobile) {
+      throw new HttpError(400, "Enter a mobile number with its country code, for example +91 98100 01000.");
+    }
+    if (mobile && findUserIdByMobile(mobile)) {
+      throw new HttpError(409, "That mobile number is already registered. Sign in with a one-time password instead.");
+    }
     const id = `USR-${randomCode(8)}`;
     const now = nowIso();
     run(
-      "INSERT INTO users (id, email, name, password_hash, role, country, organisation, active, mfa_enabled, consent_at, created_at) VALUES (?, ?, ?, ?, 'PATIENT', 'IN', NULL, 1, 0, ?, ?)",
+      "INSERT INTO users (id, email, name, password_hash, role, country, organisation, active, mfa_enabled, consent_at, phone_enc, phone_hash, whatsapp_opt_in, created_at) VALUES (?, ?, ?, ?, 'PATIENT', 'IN', NULL, 1, 0, ?, ?, ?, 0, ?)",
       id,
       body.email,
       body.name,
       await hashPassword(body.password),
       now,
+      mobile ? encryptField(mobile) : null,
+      mobile ? hashMobile(mobile) : null,
       now,
     );
     const user = get<UserRow>("SELECT * FROM users WHERE id = ?", id)!;
@@ -94,7 +118,7 @@ authRouter.post(
       entityType: "user",
       entityId: user.id,
       ...meta(req),
-      details: { email: user.email, consentAt: now },
+      details: { email: user.email, consentAt: now, mobileOnFile: mobile ? maskMobile(mobile) : null },
     });
     res.status(201).json({ user: sessionUser(user) });
   }),
@@ -177,6 +201,190 @@ authRouter.post(
   }),
 );
 
+/* --------------------------- SMS OTP patient login -------------------------- */
+
+const otpRequestSchema = z.object({ phone: z.string().trim().min(6).max(20) });
+const otpVerifySchema = z.object({
+  challengeId: z.string().trim().min(4).max(40),
+  code: z.string().trim().min(4).max(8),
+});
+
+function otpMessage(code: string): string {
+  const minutes = Math.max(1, Math.round(OTP_TTL_SECONDS / 60));
+  return `MedNotice India: ${code} is your one-time sign-in code. It expires in ${minutes} minute(s). Do not share it with anyone.`;
+}
+
+/**
+ * Issue a sign-in code to the mobile number on a patient account.
+ *
+ * Codes are only sent to numbers that belong to an active patient account, so
+ * this endpoint cannot be used to message arbitrary mobiles. The code itself is
+ * stored as a digest and is surfaced in the response only when the SMS channel
+ * is running in simulation (no gateway credentials configured).
+ */
+authRouter.post(
+  "/otp/request",
+  createRateLimiter({ bucket: "otp-request", windowMs: 10 * 60_000, max: 6 }),
+  asyncHandler(async (req, res) => {
+    if (!smsStatus().enabled) throw new HttpError(503, "SMS sign-in is disabled on this deployment.");
+    const body = parseBody(otpRequestSchema, req.body);
+    const mobile = normaliseMobile(body.phone);
+    if (!mobile) throw new HttpError(400, "Enter a valid mobile number, for example +91 98100 01000.");
+    if (recentChallengeCount("LOGIN", mobile, 10 * 60_000) >= 5) {
+      throw new HttpError(429, "Too many codes requested for this number. Wait ten minutes and try again.");
+    }
+    const userId = findUserIdByMobile(mobile);
+    const user = userId ? get<UserRow>("SELECT * FROM users WHERE id = ?", userId) : undefined;
+    if (!user || !user.active || resolveRole(user.role).baseRole !== "PATIENT") {
+      audit({
+        actor: { id: user?.id ?? null, role: user?.role ?? null },
+        action: "LOGIN_OTP_DENIED",
+        entityType: "user",
+        entityId: user?.id ?? maskMobile(mobile),
+        ...meta(req),
+        details: { reason: "no active patient account for this number" },
+      });
+      throw new HttpError(404, "No active patient account uses that mobile number. Create an account, or add the number under WhatsApp notifications first.");
+    }
+    const challenge = await createChallenge({ purpose: "LOGIN", phone: mobile, userId: user.id, message: otpMessage });
+    audit({
+      actor: { id: user.id, role: user.role },
+      action: "LOGIN_OTP_REQUESTED",
+      entityType: "user",
+      entityId: user.id,
+      ...meta(req),
+      details: { number: maskMobile(mobile), simulated: challenge.simulated },
+    });
+    res.json({
+      challengeId: challenge.id,
+      expiresAt: challenge.expiresAt,
+      masked: maskMobile(mobile),
+      simulated: challenge.simulated,
+      devCode: challenge.simulated ? challenge.code : null,
+    });
+  }),
+);
+
+/** Exchange a valid one-time password for a patient session. */
+authRouter.post(
+  "/otp/verify",
+  createRateLimiter({ bucket: "otp-verify", windowMs: 10 * 60_000, max: 20 }),
+  asyncHandler(async (req, res) => {
+    const body = parseBody(otpVerifySchema, req.body);
+    const challenge = verifyChallenge(body.challengeId, "LOGIN", body.code);
+    const user = challenge.user_id ? get<UserRow>("SELECT * FROM users WHERE id = ?", challenge.user_id) : undefined;
+    if (!user || !user.active) throw new HttpError(401, "This account is no longer available.");
+    run("UPDATE users SET phone_verified_at = COALESCE(phone_verified_at, ?) WHERE id = ?", nowIso(), user.id);
+    createSession(user, req, res);
+    audit({
+      actor: { id: user.id, role: user.role },
+      action: "LOGIN_OTP_SUCCESS",
+      entityType: "user",
+      entityId: user.id,
+      ...meta(req),
+      details: { channel: "sms", challengeId: challenge.id },
+    });
+    res.json({ user: sessionUser(get<UserRow>("SELECT * FROM users WHERE id = ?", user.id)!) });
+  }),
+);
+
+/* ------------------------------ Aadhaar identity ---------------------------- */
+
+const aadhaarRequestSchema = z.object({ aadhaar: z.string().trim().min(12).max(20) });
+
+/**
+ * Start Aadhaar verification for the signed-in patient.
+ *
+ * The number is validated structurally (12 digits plus the Verhoeff check
+ * digit), then a one-time password is sent to the mobile already on the
+ * account. Control of that handset is what proves the identity claim, because
+ * the UIDAI OTP API itself is only available to licensed AUA/ASA agencies.
+ */
+authRouter.post(
+  "/aadhaar/request",
+  attachUser,
+  requireAuth,
+  createRateLimiter({ bucket: "aadhaar-request", windowMs: 10 * 60_000, max: 6 }),
+  asyncHandler(async (req, res) => {
+    if (!smsStatus().enabled) throw new HttpError(503, "SMS delivery is disabled, so Aadhaar cannot be verified right now.");
+    const body = parseBody(aadhaarRequestSchema, req.body);
+    const check = checkAadhaar(body.aadhaar);
+    if (!check.ok) throw new HttpError(400, check.reason);
+    const user = get<UserRow>("SELECT * FROM users WHERE id = ?", req.user!.id)!;
+    if (resolveRole(user.role).baseRole !== "PATIENT") {
+      throw new HttpError(403, "Aadhaar verification is only required for patient accounts.");
+    }
+    const stored = decryptField(user.phone_enc);
+    const mobile = stored ? normaliseMobile(stored) : null;
+    if (!mobile) {
+      throw new HttpError(400, "Add a mobile number to your account first — the verification code is sent to that number.");
+    }
+    const taken = get<{ id: string }>("SELECT id FROM users WHERE aadhaar_hash = ? AND id <> ?", hashAadhaar(check.digits), user.id);
+    if (taken) throw new HttpError(409, "That Aadhaar number is already linked to another MedNotice account.");
+    if (recentChallengeCount("AADHAAR", mobile, 10 * 60_000) >= 5) {
+      throw new HttpError(429, "Too many verification codes requested. Wait ten minutes and try again.");
+    }
+    const challenge = await createChallenge({
+      purpose: "AADHAAR",
+      phone: mobile,
+      userId: user.id,
+      payload: check.digits,
+      message: (code) =>
+        `MedNotice India: ${code} is your Aadhaar verification code. It expires in ${Math.max(1, Math.round(OTP_TTL_SECONDS / 60))} minute(s). Never share it.`,
+    });
+    audit({
+      actor: { id: user.id, role: user.role },
+      action: "AADHAAR_OTP_REQUESTED",
+      entityType: "user",
+      entityId: user.id,
+      ...meta(req),
+      details: { aadhaar: maskAadhaar(check.digits), sentTo: maskMobile(mobile), simulated: challenge.simulated },
+    });
+    res.json({
+      challengeId: challenge.id,
+      expiresAt: challenge.expiresAt,
+      masked: maskAadhaar(check.digits),
+      sentTo: maskMobile(mobile),
+      simulated: challenge.simulated,
+      devCode: challenge.simulated ? challenge.code : null,
+    });
+  }),
+);
+
+/** Confirm the Aadhaar one-time password and store the verified identity. */
+authRouter.post(
+  "/aadhaar/verify",
+  attachUser,
+  requireAuth,
+  createRateLimiter({ bucket: "aadhaar-verify", windowMs: 10 * 60_000, max: 20 }),
+  asyncHandler((req, res) => {
+    const body = parseBody(otpVerifySchema, req.body);
+    const challenge = verifyChallenge(body.challengeId, "AADHAAR", body.code);
+    const digits = challenge.payload_enc ? decryptField(challenge.payload_enc) : null;
+    if (!digits) throw new HttpError(400, "This verification session is no longer valid. Start again.");
+    const user = get<UserRow>("SELECT * FROM users WHERE id = ?", req.user!.id)!;
+    const now = nowIso();
+    run(
+      "UPDATE users SET aadhaar_enc = ?, aadhaar_hash = ?, aadhaar_masked = ?, aadhaar_verified_at = ?, phone_verified_at = COALESCE(phone_verified_at, ?) WHERE id = ?",
+      encryptField(digits),
+      hashAadhaar(digits),
+      maskAadhaar(digits),
+      now,
+      now,
+      user.id,
+    );
+    audit({
+      actor: { id: user.id, role: user.role },
+      action: "AADHAAR_VERIFIED",
+      entityType: "user",
+      entityId: user.id,
+      ...meta(req),
+      details: { aadhaar: maskAadhaar(digits), method: "mobile-otp" },
+    });
+    res.json({ user: sessionUser(get<UserRow>("SELECT * FROM users WHERE id = ?", user.id)!) });
+  }),
+);
+
 const whatsappSchema = z.object({
   phone: z.string().trim().max(40).optional().default(""),
   optIn: z.boolean(),
@@ -216,7 +424,7 @@ authRouter.post(
     if (!digits) {
       throw new HttpError(400, "Enter a valid WhatsApp number with its country code, for example +91 98100 01000.");
     }
-    run("UPDATE users SET phone_enc = ?, whatsapp_opt_in = 1 WHERE id = ?", encryptField(digits), user.id);
+    run("UPDATE users SET phone_enc = ?, phone_hash = ?, whatsapp_opt_in = 1 WHERE id = ?", encryptField(digits), hashMobile(digits), user.id);
     audit({
       actor: { id: user.id, role: user.role },
       action: "WHATSAPP_OPT_IN",

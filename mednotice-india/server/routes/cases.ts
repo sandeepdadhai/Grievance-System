@@ -11,7 +11,7 @@ import { assertCaseAccess } from "../access.js";
 import { asyncHandler, createRateLimiter, HttpError, meta, parseBody } from "../http.js";
 import { requireAuth } from "../auth.js";
 import { canSeePii, caseToDto, type CaseRow, type DocumentRow, type UserRow } from "../models.js";
-import { findJurisdiction } from "../config.js";
+import { AADHAAR_REQUIRED, findJurisdiction } from "../config.js";
 import { findAuthority, getAuthority, getFacility } from "../registry.js";
 import { triage } from "../triage.js";
 import { verifyDocument, bundleStatus } from "../verification/index.js";
@@ -97,6 +97,16 @@ casesRouter.post(
     const patientName = patientUser?.name ?? body.patientName;
     const patientEmail = patientUser?.email ?? body.patientEmail;
     if (!patientName || !patientEmail) throw new HttpError(400, "Patient name and email are required");
+    // Identity gate for signed-in patients: a grievance carries clinical and
+    // personal data, so the complainant must be a verified natural person.
+    // Anonymous guest submissions stay available and are tracked by access code.
+    if (patientUser && AADHAAR_REQUIRED && !patientUser.aadhaar_verified_at) {
+      throw new HttpError(
+        403,
+        "Verify your Aadhaar number before filing a grievance. Send the verification code from your patient portal, then submit again.",
+        { code: "AADHAAR_REQUIRED" },
+      );
+    }
 
     const timeline = body.timeline ? timelineSchema.parse(JSON.parse(body.timeline)) : [];
     if (timeline.length === 0) {

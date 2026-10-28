@@ -1,7 +1,9 @@
 import type { NextFunction, Request, Response } from "express";
 import { get, nowIso, run } from "./db.js";
-import { hashToken, randomToken } from "./crypto.js";
-import { SESSION_COOKIE, SESSION_TTL_MS } from "./config.js";
+import { decryptField, hashToken, randomToken } from "./crypto.js";
+import { AADHAAR_REQUIRED, SESSION_COOKIE, SESSION_TTL_MS } from "./config.js";
+import { maskMobile, normaliseMobile } from "./otp.js";
+import { smsStatus } from "./sms.js";
 import { HttpError, meta } from "./http.js";
 import type { Role, UserRow } from "./models.js";
 import { audit } from "./audit.js";
@@ -9,6 +11,30 @@ import { resolveRole, type PermissionKey } from "./roles.js";
 import { getFacility } from "./registry.js";
 
 export type SessionUser = NonNullable<Request["user"]>;
+
+/**
+ * Identity state shared by the session DTO and `/api/auth/me`.
+ *
+ * Both surfaces must expose the same shape: the client decides whether to offer
+ * Aadhaar verification and mobile sign-in from these fields, and a page reload
+ * (which reads `/api/auth/me`) must not report a verified account as unverified.
+ */
+export function identityFor(user: UserRow) {
+  const stored = decryptField(user.phone_enc);
+  const digits = stored ? normaliseMobile(stored) : null;
+  const sms = smsStatus();
+  return {
+    phone: digits ? maskMobile(digits) : null,
+    phoneVerified: Boolean(user.phone_verified_at),
+    sms: { connected: sms.configured, simulated: sms.simulated, provider: sms.provider },
+    aadhaar: {
+      verified: Boolean(user.aadhaar_verified_at),
+      masked: user.aadhaar_verified_at ? (user.aadhaar_masked ?? null) : null,
+      verifiedAt: user.aadhaar_verified_at ?? null,
+      required: AADHAAR_REQUIRED,
+    },
+  };
+}
 
 export function parseCookies(header: string | undefined): Record<string, string> {
   if (!header) return {};
@@ -92,6 +118,7 @@ export function attachUser(req: Request, _res: Response, next: NextFunction): vo
     organisation: row.organisation,
     facilityId: row.facility_id ?? null,
     facilityName: row.facility_id ? (getFacility(row.facility_id)?.name ?? null) : null,
+    ...identityFor(row),
   };
   req.sessionId = row.session_id;
   next();
