@@ -46,6 +46,7 @@ function submitForm(): FormData {
   form.set("symptoms", "Crushing chest pain, diaphoresis, shortness of breath.");
   form.set("patientName", "Asha Nair");
   form.set("patientEmail", "asha.nair@example.in");
+  form.set("aadhaar", "4829 1573 2644");
   form.set("consentDataSharing", "true");
   form.append("documents", new Blob([new Uint8Array(buildPdf())], { type: "application/pdf" }), "ed_record.pdf");
   return form;

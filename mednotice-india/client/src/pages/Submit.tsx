@@ -260,6 +260,23 @@ export default function Submit() {
     }
   }
 
+  /**
+   * Guests have no account to prove ownership against, so the number is checked
+   * for a valid Aadhaar structure and checksum here and again by the server
+   * before the case is created.
+   */
+  async function confirmGuestAadhaar() {
+    setAadhaarError(null);
+    if (!aadhaarValid(aadhaar)) {
+      setAadhaarError(
+        "Not a valid Aadhaar number. It must be 12 digits, start with 2-9, and carry a correct Verhoeff check digit.",
+      );
+      return;
+    }
+    setAadhaarGate(false);
+    await submit();
+  }
+
   function canContinue(): boolean {
     if (step === 1) return Boolean(country && authorityId && facilityId && category);
     if (step === 2) return complaint.trim().length >= 40;
@@ -289,7 +306,7 @@ export default function Submit() {
    */
   function startSubmission() {
     setError(null);
-    if (isPatient && !aadhaarVerified) {
+    if (!aadhaarVerified) {
       setAadhaarGate(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
@@ -316,6 +333,9 @@ export default function Submit() {
       form.set("patientPhone", patientPhone);
       form.set("consentDataSharing", consent ? "true" : "false");
       form.set("crossBorderAllowed", crossBorder ? "true" : "false");
+      // A guest case carries the Aadhaar number that was checked at Submit; the
+      // server validates it again and never stores it.
+      if (!isPatient) form.set("aadhaar", aadhaar);
       for (const f of files) form.append("documents", f.file, f.file.name);
       const res = await api.post<SubmissionResult>("/api/cases", form);
       setResult(res);
@@ -738,19 +758,71 @@ export default function Submit() {
 
       {step === 4 && (
         <div className="stack fade-in">
-          {isPatient && aadhaarGate && !aadhaarVerified && (
+          {aadhaarGate && !aadhaarVerified && (
             <Card>
               <div className="card-head">
                 <h3>Aadhaar verification</h3>
                 <span className="card-sub">Verify your identity to send this grievance</span>
               </div>
               <p className="small muted" style={{ marginTop: 0 }}>
-                A patient grievance must be tied to a verified identity. Enter your 12-digit Aadhaar number and we will send a
-                one-time password to the mobile number on your account. The number is stored AES-256-GCM encrypted and is never
-                sent to the health authority.
+                {isPatient
+                  ? "A patient grievance must be tied to a verified identity. Enter your 12-digit Aadhaar number and we will send a one-time password to the mobile number on your account. The number is stored AES-256-GCM encrypted and is never sent to the health authority."
+                  : "Enter your 12-digit Aadhaar number. It is checked for a valid Aadhaar structure and checksum before the grievance leaves your browser, and it is never sent to the health authority."}
               </p>
               {aadhaarError && <Alert tone="error">{aadhaarError}</Alert>}
-              {!aadhaarChallenge ? (
+              {!isPatient ? (
+                <div className="stack" style={{ gap: 12 }}>
+                  <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                    <input
+                      className="input"
+                      style={{ maxWidth: 280 }}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      placeholder="12-digit Aadhaar number"
+                      value={aadhaar}
+                      onChange={(e) => setAadhaar(e.target.value)}
+                    />
+                    <button
+                      className="btn primary"
+                      type="button"
+                      disabled={busy || aadhaar.replace(/\D/g, "").length !== 12}
+                      onClick={() => void confirmGuestAadhaar()}
+                    >
+                      {busy ? <span className="spinner" /> : "Verify & submit grievance"}
+                    </button>
+                    <button
+                      className="btn ghost"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        setAadhaarGate(false);
+                        setAadhaarError(null);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <div>
+                    <div className="label" style={{ marginBottom: 6 }}>Test Aadhaar numbers — tap to fill</div>
+                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                      {TEST_AADHAAR.map((number) => (
+                        <button
+                          key={number}
+                          className="btn ghost sm mono"
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            setAadhaar(number);
+                            setAadhaarError(null);
+                          }}
+                        >
+                          {number}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : !aadhaarChallenge ? (
                 <div className="stack" style={{ gap: 12 }}>
                   <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
                     <input
@@ -864,7 +936,7 @@ export default function Submit() {
               <div className="meta-item"><dt>Documents</dt><dd>{files.length}</dd></div>
               <div className="meta-item"><dt>Incident date</dt><dd>{incidentDate || "not provided"}</dd></div>
               <div className="meta-item"><dt>Adapter</dt><dd className="mono">{authority?.adapter}</dd></div>
-              <div className="meta-item"><dt>Aadhaar</dt><dd>{aadhaarVerified ? user?.aadhaar?.masked : isPatient ? "Not verified yet" : "Not required"}</dd></div>
+              <div className="meta-item"><dt>Aadhaar</dt><dd>{aadhaarVerified ? user?.aadhaar?.masked : aadhaar.replace(/\D/g, "").length === 12 ? "Verified at submit" : "Required at submit"}</dd></div>
             </div>
             <div className="divider" />
             <h3 style={{ fontSize: "0.92rem", marginBottom: 6 }}>Narrative</h3>

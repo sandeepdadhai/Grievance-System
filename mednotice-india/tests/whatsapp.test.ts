@@ -46,6 +46,7 @@ function caseForm(complaint: string, opts: { guestPhone?: string } = {}): FormDa
   form.set("symptoms", "Chest pain and breathlessness after discharge.");
   form.set("consentDataSharing", "true");
   form.set("crossBorderAllowed", "false");
+  form.set("aadhaar", "4829 1573 2644");
   if (opts.guestPhone) {
     form.set("patientName", "Guest Complainant");
     form.set("patientEmail", "guest@example.in");

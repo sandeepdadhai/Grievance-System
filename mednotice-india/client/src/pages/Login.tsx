@@ -28,15 +28,10 @@ const TEST_IDENTITIES = [
   { value: "rahul.verma@demo.in", label: "Rahul Verma · email" },
 ];
 
-type Mode = "password" | "otp";
-
 export default function Login() {
   const { login, startOtp, loginWithOtp, user } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const [mode, setMode] = useState<Mode>("password");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [identifier, setIdentifier] = useState("");
   const [code, setCode] = useState("");
   const [challenge, setChallenge] = useState<OtpChallenge | null>(null);
@@ -98,13 +93,6 @@ export default function Login() {
     }
   }
 
-  function switchMode(next: Mode) {
-    setMode(next);
-    setError(null);
-    setChallenge(null);
-    setCode("");
-  }
-
   return (
     <div className="auth-shell">
       <aside className="auth-aside">
@@ -140,47 +128,11 @@ export default function Login() {
       <main className="auth-main">
         <div className="auth-card fade-in">
           <h1>Sign in</h1>
-          <p>Staff console and patient case tracking.</p>
-
-          <div className="row" style={{ gap: 8, marginBottom: 16 }}>
-            <button
-              type="button"
-              className={`btn sm ${mode === "password" ? "primary" : "ghost"}`}
-              onClick={() => switchMode("password")}
-            >
-              Email &amp; password
-            </button>
-            <button
-              type="button"
-              className={`btn sm ${mode === "otp" ? "primary" : "ghost"}`}
-              onClick={() => switchMode("otp")}
-            >
-              One-time password
-            </button>
-          </div>
+          <p>Patients sign in with a one-time password sent to their mobile number or email address.</p>
 
           {error && <Alert tone="error">{error}</Alert>}
 
-          {mode === "password" ? (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void signIn(email, password);
-              }}
-            >
-              <div className="field">
-                <label htmlFor="email">Email address</label>
-                <input id="email" className="input" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@organisation.org" required />
-              </div>
-              <div className="field">
-                <label htmlFor="password">Password</label>
-                <input id="password" className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••••" required />
-              </div>
-              <button className="btn primary block" disabled={busy} type="submit">
-                {busy ? <span className="spinner" /> : "Sign in"}
-              </button>
-            </form>
-          ) : challenge ? (
+          {challenge ? (
             <form onSubmit={verifyCode}>
               <p className="small muted" style={{ marginTop: 0 }}>
                 We sent a six-digit code to <strong className="mono">{challenge.sentTo ?? challenge.masked}</strong>
@@ -270,8 +222,11 @@ export default function Login() {
           )}
 
           <div className="divider" />
-          <div className="label" style={{ marginBottom: 8 }}>Demo accounts — one click sign in</div>
-          <div className="demo-accounts">
+          <details>
+            <summary className="label" style={{ marginBottom: 8, cursor: "pointer" }}>
+              Staff demo sign-in · email &amp; password
+            </summary>
+            <div className="demo-accounts">
             {DEMOS.map((d) => (
               <button
                 key={d.email}
@@ -285,7 +240,8 @@ export default function Login() {
                 <span className="mono tiny faint">{d.email.split("@")[0]}</span>
               </button>
             ))}
-          </div>
+            </div>
+          </details>
           <p className="tiny faint" style={{ marginTop: 10 }}>
             One-time password demo: <span className="mono">{DEMO_MOBILE}</span> or <span className="mono">patient@demo.in</span> on
             the demo patient account. In simulation the code is written to the server outbox and filled in for you on the next

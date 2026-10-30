@@ -170,8 +170,20 @@ test("Aadhaar identity and SMS one-time-password authentication", async (t) => {
     assert.equal(stored.aadhaar_hash.length, 64);
   });
 
-  await t.test("guest submissions stay anonymous and need no Aadhaar", async () => {
-    const res = await fetch(`${base}/api/cases`, { method: "POST", body: submitForm({ patientName: "Anonymous Guest", patientEmail: "guest@example.in" }) });
+  await t.test("guest submissions are refused until a valid Aadhaar number is supplied", async () => {
+    const guest = { patientName: "Anonymous Guest", patientEmail: "guest@example.in" };
+
+    const missing = await fetch(`${base}/api/cases`, { method: "POST", body: submitForm(guest) });
+    const missingBody = await missing.json();
+    assert.equal(missing.status, 400, JSON.stringify(missingBody));
+    assert.match(missingBody.error, /Aadhaar/);
+
+    const invalid = await fetch(`${base}/api/cases`, { method: "POST", body: submitForm({ ...guest, aadhaar: "482915732645" }) });
+    const invalidBody = await invalid.json();
+    assert.equal(invalid.status, 400, JSON.stringify(invalidBody));
+    assert.match(invalidBody.error, /Not a valid Aadhaar number/);
+
+    const res = await fetch(`${base}/api/cases`, { method: "POST", body: submitForm({ ...guest, aadhaar: "4829 1573 2644" }) });
     const body = await res.json();
     assert.equal(res.status, 201, JSON.stringify(body));
     assert.equal(typeof body.accessCode, "string");

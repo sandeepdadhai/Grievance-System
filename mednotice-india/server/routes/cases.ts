@@ -12,6 +12,7 @@ import { asyncHandler, createRateLimiter, HttpError, meta, parseBody } from "../
 import { requireAuth } from "../auth.js";
 import { canSeePii, caseToDto, type CaseRow, type DocumentRow, type UserRow } from "../models.js";
 import { AADHAAR_REQUIRED, findJurisdiction } from "../config.js";
+import { checkAadhaar } from "../aadhaar.js";
 import { findAuthority, getAuthority, getFacility } from "../registry.js";
 import { triage } from "../triage.js";
 import { verifyDocument, bundleStatus } from "../verification/index.js";
@@ -45,6 +46,12 @@ const submitSchema = z.object({
   consentDataSharing: boolish,
   crossBorderAllowed: boolish.optional().default(false),
   language: z.string().trim().min(2).max(8).optional().default("en"),
+  /**
+   * Aadhaar number supplied at Submit by an anonymous guest. Signed-in patients
+   * use the identity verified on their account instead, so this is ignored for
+   * them and never stored either way.
+   */
+  aadhaar: z.string().trim().max(20).optional().default(""),
 });
 
 const timelineSchema = z
@@ -97,15 +104,30 @@ casesRouter.post(
     const patientName = patientUser?.name ?? body.patientName;
     const patientEmail = patientUser?.email ?? body.patientEmail;
     if (!patientName || !patientEmail) throw new HttpError(400, "Patient name and email are required");
-    // Identity gate for signed-in patients: a grievance carries clinical and
-    // personal data, so the complainant must be a verified natural person.
-    // Anonymous guest submissions stay available and are tracked by access code.
-    if (patientUser && AADHAAR_REQUIRED && !patientUser.aadhaar_verified_at) {
-      throw new HttpError(
-        403,
-        "Verify your Aadhaar number before filing a grievance. Send the verification code from your patient portal, then submit again.",
-        { code: "AADHAAR_REQUIRED" },
-      );
+    // Identity gate: a grievance carries clinical and personal data, so the
+    // complainant must be a verified natural person. Signed-in patients prove
+    // ownership with a code on their registered mobile; guests have no account
+    // to prove against, so the number is validated structurally here and then
+    // discarded — nothing about it is persisted with the case.
+    if (AADHAAR_REQUIRED) {
+      if (patientUser && !patientUser.aadhaar_verified_at) {
+        throw new HttpError(
+          403,
+          "Verify your Aadhaar number before filing a grievance. Send the verification code from your patient portal, then submit again.",
+          { code: "AADHAAR_REQUIRED" },
+        );
+      }
+      if (!patientUser) {
+        const guestAadhaar = body.aadhaar ?? "";
+        const check = checkAadhaar(guestAadhaar);
+        if (!check.ok) {
+          throw new HttpError(
+            400,
+            guestAadhaar ? `Not a valid Aadhaar number. ${check.reason}` : "Enter your 12-digit Aadhaar number to file a grievance.",
+            { code: "AADHAAR_REQUIRED" },
+          );
+        }
+      }
     }
 
     const timeline = body.timeline ? timelineSchema.parse(JSON.parse(body.timeline)) : [];

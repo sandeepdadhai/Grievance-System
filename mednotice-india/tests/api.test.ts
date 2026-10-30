@@ -48,6 +48,7 @@ function submitForm(opts: { pdf: Buffer; complaint: string; fileName?: string })
   form.set("patientPhone", "+91 98100 98765");
   form.set("consentDataSharing", "true");
   form.set("crossBorderAllowed", "false");
+  form.set("aadhaar", "4829 1573 2644");
   form.append("documents", new Blob([new Uint8Array(opts.pdf)], { type: "application/pdf" }), opts.fileName ?? "ed_record.pdf");
   return form;
 }
