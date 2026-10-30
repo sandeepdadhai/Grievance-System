@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { get, nowIso, run } from "../db.js";
-import { decryptField, encryptField, hashPassword, randomCode, verifyPassword } from "../crypto.js";
+import { decryptField, encryptField, hashPassword, maskEmail, randomCode, verifyPassword } from "../crypto.js";
 import { OTP_TTL_SECONDS } from "../config.js";
 import { checkAadhaar, hashAadhaar, maskAadhaar } from "../aadhaar.js";
 import {
@@ -12,8 +12,10 @@ import {
   normaliseMobile,
   recentChallengeCount,
   verifyChallenge,
+  type OtpChannel,
 } from "../otp.js";
 import { smsStatus } from "../sms.js";
+import { emailStatus } from "../email.js";
 import { maskWhatsAppNumber, normalizeWhatsAppNumber, whatsappStatus } from "../whatsapp.js";
 import { attachUser, createSession, destroySession, identityFor, requireAuth } from "../auth.js";
 import { audit } from "../audit.js";
@@ -203,7 +205,14 @@ authRouter.post(
 
 /* --------------------------- SMS OTP patient login -------------------------- */
 
-const otpRequestSchema = z.object({ phone: z.string().trim().min(6).max(20) });
+/**
+ * Sign-in identifier: the mobile number or email address on the account.
+ * `phone` is still accepted so an older client keeps working.
+ */
+const otpRequestSchema = z.object({
+  identifier: z.string().trim().min(5).max(200).optional(),
+  phone: z.string().trim().min(5).max(200).optional(),
+});
 const otpVerifySchema = z.object({
   challengeId: z.string().trim().min(4).max(40),
   code: z.string().trim().min(4).max(8),
@@ -214,51 +223,90 @@ function otpMessage(code: string): string {
   return `MedNotice India: ${code} is your one-time sign-in code. It expires in ${minutes} minute(s). Do not share it with anyone.`;
 }
 
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
 /**
- * Issue a sign-in code to the mobile number on a patient account.
+ * Issue a sign-in code to a patient account.
  *
- * Codes are only sent to numbers that belong to an active patient account, so
- * this endpoint cannot be used to message arbitrary mobiles. The code itself is
- * stored as a digest and is surfaced in the response only when the SMS channel
- * is running in simulation (no gateway credentials configured).
+ * One field takes either a registered mobile number or the email address on the
+ * account, and the code always goes by the matching channel: an SMS to the
+ * number, an email to the mailbox. Codes are only sent to identifiers that
+ * belong to an active patient account, so this endpoint cannot be used to
+ * message arbitrary numbers or inboxes. The code itself is stored as a digest
+ * and is surfaced in the response only while the channel runs in simulation
+ * (no provider credentials configured).
  */
 authRouter.post(
   "/otp/request",
   createRateLimiter({ bucket: "otp-request", windowMs: 10 * 60_000, max: 6 }),
   asyncHandler(async (req, res) => {
-    if (!smsStatus().enabled) throw new HttpError(503, "SMS sign-in is disabled on this deployment.");
     const body = parseBody(otpRequestSchema, req.body);
-    const mobile = normaliseMobile(body.phone);
-    if (!mobile) throw new HttpError(400, "Enter a valid mobile number, for example +91 98100 01000.");
-    if (recentChallengeCount("LOGIN", mobile, 10 * 60_000) >= 5) {
-      throw new HttpError(429, "Too many codes requested for this number. Wait ten minutes and try again.");
+    const raw = (body.identifier ?? body.phone ?? "").trim();
+    if (!raw) throw new HttpError(400, "Enter the mobile number or email address on your account.");
+    const channel: OtpChannel = raw.includes("@") ? "EMAIL" : "SMS";
+
+    let identifier: string;
+    if (channel === "EMAIL") {
+      const email = raw.toLowerCase();
+      if (!EMAIL_RE.test(email)) throw new HttpError(400, "Enter a valid email address, for example you@example.org.");
+      if (!emailStatus().enabled) throw new HttpError(503, "Email sign-in is disabled on this deployment.");
+      identifier = email;
+    } else {
+      const mobile = normaliseMobile(raw);
+      if (!mobile) throw new HttpError(400, "Enter a valid mobile number, for example +91 98100 01000.");
+      if (!smsStatus().enabled) throw new HttpError(503, "SMS sign-in is disabled on this deployment.");
+      identifier = mobile;
     }
-    const userId = findUserIdByMobile(mobile);
-    const user = userId ? get<UserRow>("SELECT * FROM users WHERE id = ?", userId) : undefined;
+
+    if (recentChallengeCount("LOGIN", identifier, 10 * 60_000, channel) >= 5) {
+      throw new HttpError(429, "Too many codes requested for this account. Wait ten minutes and try again.");
+    }
+    const userId = channel === "SMS" ? findUserIdByMobile(identifier) : null;
+    const user =
+      channel === "EMAIL"
+        ? get<UserRow>("SELECT * FROM users WHERE email = ?", identifier)
+        : userId
+          ? get<UserRow>("SELECT * FROM users WHERE id = ?", userId)
+          : undefined;
     if (!user || !user.active || resolveRole(user.role).baseRole !== "PATIENT") {
       audit({
         actor: { id: user?.id ?? null, role: user?.role ?? null },
         action: "LOGIN_OTP_DENIED",
         entityType: "user",
-        entityId: user?.id ?? maskMobile(mobile),
+        entityId: user?.id ?? identifier,
         ...meta(req),
-        details: { reason: "no active patient account for this number" },
+        details: { channel, reason: "no active patient account for this identifier" },
       });
-      throw new HttpError(404, "No active patient account uses that mobile number. Create an account, or add the number under WhatsApp notifications first.");
+      throw new HttpError(
+        404,
+        channel === "EMAIL"
+          ? "No active patient account uses that email address. Create an account to get started."
+          : "No active patient account uses that mobile number. Create an account, or add the number under WhatsApp notifications first.",
+      );
     }
-    const challenge = await createChallenge({ purpose: "LOGIN", phone: mobile, userId: user.id, message: otpMessage });
+    const challenge = await createChallenge({
+      purpose: "LOGIN",
+      identifier,
+      channel,
+      userId: user.id,
+      subject: "Your MedNotice India sign-in code",
+      message: otpMessage,
+    });
+    const masked = channel === "EMAIL" ? maskEmail(identifier) : maskMobile(identifier);
     audit({
       actor: { id: user.id, role: user.role },
       action: "LOGIN_OTP_REQUESTED",
       entityType: "user",
       entityId: user.id,
       ...meta(req),
-      details: { number: maskMobile(mobile), simulated: challenge.simulated },
+      details: { channel, identifier: masked, simulated: challenge.simulated },
     });
     res.json({
       challengeId: challenge.id,
       expiresAt: challenge.expiresAt,
-      masked: maskMobile(mobile),
+      channel,
+      masked,
+      sentTo: masked,
       simulated: challenge.simulated,
       devCode: challenge.simulated ? challenge.code : null,
     });
@@ -326,7 +374,7 @@ authRouter.post(
     }
     const challenge = await createChallenge({
       purpose: "AADHAAR",
-      phone: mobile,
+      identifier: mobile,
       userId: user.id,
       payload: check.digits,
       message: (code) =>

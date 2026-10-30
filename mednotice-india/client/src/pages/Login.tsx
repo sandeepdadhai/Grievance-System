@@ -17,12 +17,15 @@ const DEMOS = [
 const DEMO_MOBILE = "9810000123";
 
 /**
- * Test numbers accepted by the OTP form. Only these numbers have accounts, so
- * the endpoint cannot be turned into a way of texting an arbitrary mobile.
+ * Test accounts accepted by the one-time-password form. Only these accounts
+ * exist, so the endpoint cannot be turned into a way of messaging an arbitrary
+ * mobile or mailbox. The same field takes either form.
  */
-const TEST_MOBILES = [
-  { phone: DEMO_MOBILE, label: "Demo patient" },
-  { phone: "9810000124", label: "Rahul Verma (Hindi case)" },
+const TEST_IDENTITIES = [
+  { value: DEMO_MOBILE, label: "Demo patient · SMS" },
+  { value: "patient@demo.in", label: "Demo patient · email" },
+  { value: "9810000124", label: "Rahul Verma · SMS" },
+  { value: "rahul.verma@demo.in", label: "Rahul Verma · email" },
 ];
 
 type Mode = "password" | "otp";
@@ -34,7 +37,7 @@ export default function Login() {
   const [mode, setMode] = useState<Mode>("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [phone, setPhone] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [code, setCode] = useState("");
   const [challenge, setChallenge] = useState<OtpChallenge | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +71,7 @@ export default function Login() {
     setBusy(true);
     setError(null);
     try {
-      const next = await startOtp(phone);
+      const next = await startOtp(identifier);
       setChallenge(next);
       // Simulation mode hands the code back so a tester can finish the flow;
       // a live gateway returns no devCode and the field stays empty.
@@ -152,7 +155,7 @@ export default function Login() {
               className={`btn sm ${mode === "otp" ? "primary" : "ghost"}`}
               onClick={() => switchMode("otp")}
             >
-              Mobile OTP
+              One-time password
             </button>
           </div>
 
@@ -180,8 +183,8 @@ export default function Login() {
           ) : challenge ? (
             <form onSubmit={verifyCode}>
               <p className="small muted" style={{ marginTop: 0 }}>
-                We sent a six-digit code to <strong className="mono">{challenge.masked}</strong>. It expires in five minutes and can
-                be used once.
+                We sent a six-digit code to <strong className="mono">{challenge.sentTo ?? challenge.masked}</strong>
+                {challenge.channel === "EMAIL" ? " by email" : " by SMS"}. It expires in five minutes and can be used once.
               </p>
               {challenge.devCode && (
                 <Alert tone="warn">
@@ -215,52 +218,53 @@ export default function Login() {
                   setCode("");
                 }}
               >
-                Use a different number
+                Use a different number or email
               </button>
             </form>
           ) : (
             <form onSubmit={sendCode}>
               <div className="field">
-                <label htmlFor="otp-phone">Registered mobile number</label>
+                <label htmlFor="otp-identifier">Mobile number or email address</label>
                 <input
-                  id="otp-phone"
+                  id="otp-identifier"
                   className="input"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+91 98100 01000"
+                  autoComplete="username"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="+91 98100 01000 or you@example.org"
                   required
                 />
                 <span className="hint">
-                  Patients sign in with the number saved on their account. No account yet? <Link to="/signup">Create one</Link>.
+                  One code, sent to whichever you enter — an SMS to a mobile number, an email to a mailbox. Patients sign in with
+                  the number or address saved on their account. No account yet? <Link to="/signup">Create one</Link>.
                 </span>
               </div>
               <button className="btn primary block" disabled={busy} type="submit">
                 {busy ? <span className="spinner" /> : "Send one-time password"}
               </button>
-              <div className="label" style={{ marginBottom: 6 }}>Test numbers — tap to fill</div>
+              <div className="label" style={{ marginBottom: 6 }}>Test accounts — tap to fill</div>
               <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                {TEST_MOBILES.map((t) => (
+                {TEST_IDENTITIES.map((t) => (
                   <button
-                    key={t.phone}
+                    key={t.value}
                     className="btn ghost sm"
                     type="button"
                     disabled={busy}
                     onClick={() => {
-                      setPhone(t.phone);
+                      setIdentifier(t.value);
                       setError(null);
                     }}
                   >
-                    <span className="mono">{t.phone}</span>
+                    <span className="mono">{t.value}</span>
                     <span className="faint"> · {t.label}</span>
                   </button>
                 ))}
               </div>
               <p className="tiny faint" style={{ marginTop: 8 }}>
-                With no SMS gateway configured the six-digit code is returned by the server and filled in for you on the next
-                screen, so the flow can be walked end to end. Live delivery needs <span className="mono">SMS_PROVIDER</span> set in
-                the server environment.
+                With no SMS gateway or email provider configured the six-digit code is returned by the server and filled in for you
+                on the next screen, so the flow can be walked end to end. Live delivery needs{" "}
+                <span className="mono">SMS_PROVIDER</span> or <span className="mono">EMAIL_API_URL</span> set in the server
+                environment.
               </p>
             </form>
           )}
@@ -283,8 +287,9 @@ export default function Login() {
             ))}
           </div>
           <p className="tiny faint" style={{ marginTop: 10 }}>
-            Mobile OTP demo: number <span className="mono">{DEMO_MOBILE}</span> on the demo patient account. In simulation the code is
-            written to the server outbox and shown on the next screen.
+            One-time password demo: <span className="mono">{DEMO_MOBILE}</span> or <span className="mono">patient@demo.in</span> on
+            the demo patient account. In simulation the code is written to the server outbox and filled in for you on the next
+            screen.
           </p>
           <p className="tiny faint" style={{ marginTop: 16 }}>
             New patient? <Link to="/signup">Create an account</Link> to keep every case in one workspace. Prefer to stay anonymous? <Link to="/submit">File a grievance as a guest</Link> — you will receive a case reference and access code.

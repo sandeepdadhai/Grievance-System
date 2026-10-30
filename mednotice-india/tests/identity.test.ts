@@ -103,6 +103,22 @@ test("Aadhaar identity and SMS one-time-password authentication", async (t) => {
     assert.equal(res.body.devCode ?? null, null);
   });
 
+  await t.test("the same one-time password form signs in with an email address", async () => {
+    const request = await post("/api/auth/otp/request", { identifier: "patient@demo.in" });
+    assert.equal(request.status, 200, JSON.stringify(request.body));
+    assert.equal(request.body.channel, "EMAIL");
+    assert.equal(request.body.simulated, true, "no email provider configured, so the code is simulated");
+    assert.match(request.body.devCode, /^\d{6}$/);
+    assert.match(request.body.masked, /@d\*\*\*\.in$/);
+
+    const ok = await post("/api/auth/otp/verify", { challengeId: request.body.challengeId, code: request.body.devCode });
+    assert.equal(ok.status, 200, JSON.stringify(ok.body));
+    assert.equal(ok.body.user.email, "patient@demo.in");
+
+    const unknown = await post("/api/auth/otp/request", { identifier: "nobody@example.in" });
+    assert.equal(unknown.status, 404);
+  });
+
   await t.test("the demo patient's Aadhaar is verified and stored encrypted", () => {
     const row = get<{ aadhaar_enc: string; aadhaar_masked: string; aadhaar_verified_at: string; phone_enc: string }>(
       "SELECT aadhaar_enc, aadhaar_masked, aadhaar_verified_at, phone_enc FROM users WHERE id = 'USR-PATIENT'",

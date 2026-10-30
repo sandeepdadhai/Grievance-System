@@ -2,11 +2,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { api } from "./api";
 import type { User } from "./types";
 
-/** Response of the SMS challenge endpoints. `devCode` is only set in simulation. */
+/** Response of the one-time-password endpoints. `devCode` is only set in simulation. */
 export type OtpChallenge = {
   challengeId: string;
   expiresAt: string;
+  /** Where the code went: SMS to a mobile number, email to a mailbox. */
+  channel?: "SMS" | "EMAIL";
   masked: string;
+  sentTo?: string;
   simulated: boolean;
   devCode: string | null;
 };
@@ -16,8 +19,8 @@ type AuthState = {
   loading: boolean;
   login: (email: string, password: string) => Promise<User>;
   signup: (input: { name: string; email: string; password: string; phone?: string }) => Promise<User>;
-  /** Ask the server to text a one-time password to a patient's mobile number. */
-  startOtp: (phone: string) => Promise<OtpChallenge>;
+  /** Ask the server for a code sent to the patient's mobile number or email. */
+  startOtp: (identifier: string) => Promise<OtpChallenge>;
   /** Exchange a valid one-time password for a session. */
   loginWithOtp: (challengeId: string, code: string) => Promise<User>;
   logout: () => Promise<void>;
@@ -59,8 +62,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return next;
   }, []);
 
-  const startOtp = useCallback(async (phone: string) => {
-    return api.post<OtpChallenge>("/api/auth/otp/request", { phone });
+  const startOtp = useCallback(async (identifier: string) => {
+    return api.post<OtpChallenge>("/api/auth/otp/request", { identifier });
   }, []);
 
   const loginWithOtp = useCallback(async (challengeId: string, code: string) => {

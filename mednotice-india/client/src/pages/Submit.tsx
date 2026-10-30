@@ -32,6 +32,43 @@ const ACCEPT = ".pdf,.jpg,.jpeg,.png,.dcm,application/pdf,image/jpeg,image/png,a
 const TEST_AADHAAR = ["4829 1573 2644", "6730 4825 1985"];
 
 /**
+ * Verhoeff checksum, mirroring the server's structural check, so a mistyped
+ * Aadhaar number is refused on the spot instead of after a round trip.
+ */
+const V_D = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+  [2, 3, 4, 0, 1, 7, 8, 9, 5, 6],
+  [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+  [4, 0, 1, 2, 3, 9, 5, 6, 7, 8],
+  [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+  [6, 5, 9, 8, 7, 1, 0, 4, 3, 2],
+  [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+  [8, 7, 6, 5, 9, 3, 2, 1, 0, 4],
+  [9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+];
+const V_P = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  [1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+  [5, 8, 0, 3, 7, 9, 6, 1, 4, 2],
+  [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+  [9, 4, 5, 3, 1, 2, 6, 8, 7, 0],
+  [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+  [2, 7, 9, 3, 8, 0, 6, 4, 1, 5],
+  [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
+];
+
+/** Aadhaar numbers are 12 digits, never start with 0 or 1, and carry a Verhoeff digit. */
+function aadhaarValid(input: string): boolean {
+  const digits = input.replace(/\D/g, "");
+  if (digits.length !== 12 || digits.startsWith("0") || digits.startsWith("1")) return false;
+  let c = 0;
+  const reversed = digits.split("").reverse().map(Number);
+  for (let i = 0; i < reversed.length; i += 1) c = V_D[c][V_P[i % 8][reversed[i]]];
+  return c === 0;
+}
+
+/**
  * Advisory digest for the client-side pre-screen.
  *
  * `crypto.subtle` only exists in a secure context (HTTPS or localhost). On a
@@ -113,6 +150,8 @@ export default function Submit() {
   const [aadhaarChallenge, setAadhaarChallenge] = useState<{ id: string; devCode: string | null; masked: string; sentTo: string } | null>(null);
   const [aadhaarBusy, setAadhaarBusy] = useState(false);
   const [aadhaarError, setAadhaarError] = useState<string | null>(null);
+  /** Set when Submit is pressed without a verified Aadhaar on a patient account. */
+  const [aadhaarGate, setAadhaarGate] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isPatient = user?.baseRole === "PATIENT";
@@ -176,8 +215,14 @@ export default function Submit() {
   }
 
   async function requestAadhaarOtp() {
-    setAadhaarBusy(true);
     setAadhaarError(null);
+    if (!aadhaarValid(aadhaar)) {
+      setAadhaarError(
+        "Not a valid Aadhaar number. It must be 12 digits, start with 2-9, and carry a correct Verhoeff check digit.",
+      );
+      return;
+    }
+    setAadhaarBusy(true);
     try {
       const res = await api.post<{ challengeId: string; masked: string; sentTo: string; devCode: string | null }>(
         "/api/auth/aadhaar/request",
@@ -204,6 +249,10 @@ export default function Submit() {
       setAadhaarChallenge(null);
       setAadhaar("");
       setAadhaarCode("");
+      setAadhaarGate(false);
+      // The identity is now proven, so continue with the submission the patient
+      // already asked for instead of making them press Submit again.
+      await submit();
     } catch (err) {
       setAadhaarError((err as Error).message);
     } finally {
@@ -214,7 +263,7 @@ export default function Submit() {
   function canContinue(): boolean {
     if (step === 1) return Boolean(country && authorityId && facilityId && category);
     if (step === 2) return complaint.trim().length >= 40;
-    if (step === 3) return Boolean(patientName.trim() && /.+@.+\..+/.test(patientEmail) && consent && (!isPatient || aadhaarVerified));
+    if (step === 3) return Boolean(patientName.trim() && /.+@.+\..+/.test(patientEmail) && consent);
     return true;
   }
 
@@ -225,14 +274,27 @@ export default function Submit() {
           ? "Select a state, health authority, facility and category."
           : step === 2
             ? "Describe the grievance in at least 40 characters."
-            : isPatient && !aadhaarVerified
-              ? "Verify your Aadhaar number first — it is required for patient submissions."
-              : "Provide a name, a valid email address and consent to proceed.",
+            : "Provide a name, a valid email address and consent to proceed.",
       );
       return;
     }
     setError(null);
     setStep(Math.min(4, step + 1));
+  }
+
+  /**
+   * Submit is the point where a patient account proves its identity: the
+   * Aadhaar number is requested here, and the grievance only leaves the browser
+   * once the code sent to the registered mobile has been confirmed.
+   */
+  function startSubmission() {
+    setError(null);
+    if (isPatient && !aadhaarVerified) {
+      setAadhaarGate(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    void submit();
   }
 
   async function submit() {
@@ -632,116 +694,6 @@ export default function Submit() {
             </div>
           </Card>
 
-          {isPatient && (
-            <Card>
-              <div className="card-head">
-                <h3>Aadhaar verification</h3>
-                <span className="card-sub">{aadhaarVerified ? "Verified" : "Required before a patient grievance is accepted"}</span>
-              </div>
-              {aadhaarVerified ? (
-                <Alert tone="success">
-                  <strong>Aadhaar verified.</strong> {user?.aadhaar?.masked} was confirmed with a one-time password sent to your
-                  registered mobile number. Only the masked form is ever displayed.
-                </Alert>
-              ) : (
-                <div className="stack" style={{ gap: 12 }}>
-                  <p className="small muted" style={{ margin: 0 }}>
-                    Patient submissions must be tied to a verified identity. We check the Aadhaar number structurally, then send a
-                    one-time password to the mobile number on your account. The number is stored AES-256-GCM encrypted and is never
-                    sent to the health authority.
-                  </p>
-                  {aadhaarError && <Alert tone="error">{aadhaarError}</Alert>}
-                  {!aadhaarChallenge ? (
-                    <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
-                      <input
-                        className="input"
-                        style={{ maxWidth: 280 }}
-                        inputMode="numeric"
-                        autoComplete="off"
-                        placeholder="12-digit Aadhaar number"
-                        value={aadhaar}
-                        onChange={(e) => setAadhaar(e.target.value)}
-                      />
-                      <button
-                        className="btn primary"
-                        type="button"
-                        disabled={aadhaarBusy || aadhaar.replace(/\D/g, "").length !== 12}
-                        onClick={() => void requestAadhaarOtp()}
-                      >
-                        {aadhaarBusy ? <span className="spinner" /> : "Send verification code"}
-                      </button>
-                    </div>
-                  ) : null}
-                  {!aadhaarChallenge && (
-                    <div>
-                      <div className="label" style={{ marginBottom: 6 }}>Test Aadhaar numbers — tap to fill</div>
-                      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                        {TEST_AADHAAR.map((number) => (
-                          <button
-                            key={number}
-                            className="btn ghost sm mono"
-                            type="button"
-                            disabled={aadhaarBusy}
-                            onClick={() => {
-                              setAadhaar(number);
-                              setAadhaarError(null);
-                            }}
-                          >
-                            {number}
-                          </button>
-                        ))}
-                      </div>
-                      <p className="tiny faint" style={{ marginTop: 8, marginBottom: 0 }}>
-                        Sandbox identities for the demo patient accounts. Any Verhoeff-valid number works for your own account, and the
-                        code goes to the mobile number you registered with. With no SMS gateway configured the server returns the code
-                        and it is filled in for you on the next step.
-                      </p>
-                    </div>
-                  )}
-                  {aadhaarChallenge && (
-                    <div className="stack" style={{ gap: 10 }}>
-                      <p className="small" style={{ margin: 0 }}>
-                        Code sent to <strong className="mono">{aadhaarChallenge.sentTo}</strong> for {aadhaarChallenge.masked}. It
-                        expires in five minutes and can be used once.
-                      </p>
-                      {aadhaarChallenge.devCode && (
-                        <Alert tone="warn">
-                          SMS gateway not configured — simulation mode. Your code is{" "}
-                          <strong className="mono">{aadhaarChallenge.devCode}</strong>.
-                        </Alert>
-                      )}
-                      <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
-                        <input
-                          className="input"
-                          style={{ maxWidth: 190 }}
-                          inputMode="numeric"
-                          autoComplete="one-time-code"
-                          placeholder="6-digit code"
-                          value={aadhaarCode}
-                          onChange={(e) => setAadhaarCode(e.target.value)}
-                        />
-                        <button className="btn primary" type="button" disabled={aadhaarBusy || aadhaarCode.length < 4} onClick={() => void confirmAadhaar()}>
-                          {aadhaarBusy ? <span className="spinner" /> : "Verify Aadhaar"}
-                        </button>
-                        <button
-                          className="btn ghost"
-                          type="button"
-                          disabled={aadhaarBusy}
-                          onClick={() => {
-                            setAadhaarChallenge(null);
-                            setAadhaarCode("");
-                          }}
-                        >
-                          Start over
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </Card>
-          )}
-
           <Card>
             <div className="card-head"><h3>Your details</h3><span className="card-sub">Stored encrypted · shared only with the selected authority</span></div>
             <div className="form-grid">
@@ -786,6 +738,121 @@ export default function Submit() {
 
       {step === 4 && (
         <div className="stack fade-in">
+          {isPatient && aadhaarGate && !aadhaarVerified && (
+            <Card>
+              <div className="card-head">
+                <h3>Aadhaar verification</h3>
+                <span className="card-sub">Verify your identity to send this grievance</span>
+              </div>
+              <p className="small muted" style={{ marginTop: 0 }}>
+                A patient grievance must be tied to a verified identity. Enter your 12-digit Aadhaar number and we will send a
+                one-time password to the mobile number on your account. The number is stored AES-256-GCM encrypted and is never
+                sent to the health authority.
+              </p>
+              {aadhaarError && <Alert tone="error">{aadhaarError}</Alert>}
+              {!aadhaarChallenge ? (
+                <div className="stack" style={{ gap: 12 }}>
+                  <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                    <input
+                      className="input"
+                      style={{ maxWidth: 280 }}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      placeholder="12-digit Aadhaar number"
+                      value={aadhaar}
+                      onChange={(e) => setAadhaar(e.target.value)}
+                    />
+                    <button
+                      className="btn primary"
+                      type="button"
+                      disabled={aadhaarBusy || aadhaar.replace(/\D/g, "").length !== 12}
+                      onClick={() => void requestAadhaarOtp()}
+                    >
+                      {aadhaarBusy ? <span className="spinner" /> : "Verify Aadhaar"}
+                    </button>
+                    <button
+                      className="btn ghost"
+                      type="button"
+                      disabled={aadhaarBusy}
+                      onClick={() => {
+                        setAadhaarGate(false);
+                        setAadhaarError(null);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <div>
+                    <div className="label" style={{ marginBottom: 6 }}>Test Aadhaar numbers — tap to fill</div>
+                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                      {TEST_AADHAAR.map((number) => (
+                        <button
+                          key={number}
+                          className="btn ghost sm mono"
+                          type="button"
+                          disabled={aadhaarBusy}
+                          onClick={() => {
+                            setAadhaar(number);
+                            setAadhaarError(null);
+                          }}
+                        >
+                          {number}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="tiny faint" style={{ marginTop: 8, marginBottom: 0 }}>
+                      Sandbox identities for the demo patient accounts. Any Verhoeff-valid number works for your own account; the
+                      code always goes to the mobile number you registered with.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="stack" style={{ gap: 10 }}>
+                  <p className="small" style={{ margin: 0 }}>
+                    Code sent to <strong className="mono">{aadhaarChallenge.sentTo}</strong> for {aadhaarChallenge.masked}. It
+                    expires in five minutes and can be used once.
+                  </p>
+                  {aadhaarChallenge.devCode && (
+                    <Alert tone="warn">
+                      SMS gateway not configured — simulation mode. Your code is{" "}
+                      <strong className="mono">{aadhaarChallenge.devCode}</strong>.
+                    </Alert>
+                  )}
+                  <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                    <input
+                      className="input"
+                      style={{ maxWidth: 190 }}
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="6-digit code"
+                      value={aadhaarCode}
+                      onChange={(e) => setAadhaarCode(e.target.value)}
+                    />
+                    <button
+                      className="btn primary"
+                      type="button"
+                      disabled={aadhaarBusy || aadhaarCode.length < 4}
+                      onClick={() => void confirmAadhaar()}
+                    >
+                      {aadhaarBusy ? <span className="spinner" /> : "Verify & submit grievance"}
+                    </button>
+                    <button
+                      className="btn ghost"
+                      type="button"
+                      disabled={aadhaarBusy}
+                      onClick={() => {
+                        setAadhaarChallenge(null);
+                        setAadhaarCode("");
+                      }}
+                    >
+                      Use a different number
+                    </button>
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
+
           <Card>
             <div className="card-head"><h3>Review</h3><span className="card-sub">Nothing is transmitted until you submit</span></div>
             <div className="meta-grid">
@@ -797,6 +864,7 @@ export default function Submit() {
               <div className="meta-item"><dt>Documents</dt><dd>{files.length}</dd></div>
               <div className="meta-item"><dt>Incident date</dt><dd>{incidentDate || "not provided"}</dd></div>
               <div className="meta-item"><dt>Adapter</dt><dd className="mono">{authority?.adapter}</dd></div>
+              <div className="meta-item"><dt>Aadhaar</dt><dd>{aadhaarVerified ? user?.aadhaar?.masked : isPatient ? "Not verified yet" : "Not required"}</dd></div>
             </div>
             <div className="divider" />
             <h3 style={{ fontSize: "0.92rem", marginBottom: 6 }}>Narrative</h3>
@@ -812,7 +880,7 @@ export default function Submit() {
 
           <div className="row-between">
             <button className="btn ghost" onClick={() => setStep(3)}>Back</button>
-            <button className="btn primary" onClick={() => void submit()} disabled={busy || !consent}>
+            <button className="btn primary" onClick={startSubmission} disabled={busy || !consent}>
               {busy ? <><span className="spinner" /> Verifying & routing…</> : <>Submit grievance <Icon name="arrow" size={15} /></>}
             </button>
           </div>

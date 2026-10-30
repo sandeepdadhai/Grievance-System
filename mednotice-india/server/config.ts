@@ -71,6 +71,22 @@ export const SMS_TWILIO_FROM = process.env.SMS_TWILIO_FROM ?? "";
 export const SMS_SIMULATE = process.env.SMS_SIMULATE === "1";
 /** Country code assumed for numbers entered without one (India by default). */
 export const SMS_DEFAULT_COUNTRY = process.env.SMS_DEFAULT_COUNTRY ?? "91";
+
+/**
+ * Transactional email — one-time passwords for patients who sign in with the
+ * email address on their account.
+ *
+ * EMAIL_API_URL receives a JSON POST of {from, to, subject, text} with an
+ * Authorization: Bearer EMAIL_API_KEY header (the shape Resend, Postmark and
+ * the SES HTTP bridge expose). With no credentials, or EMAIL_SIMULATE=1, the
+ * message is written to $DATA_DIR/outbox and reported as simulated, so email
+ * sign-in stays demonstrable without a provider account.
+ */
+export const EMAIL_ENABLED = process.env.EMAIL_ENABLED !== "0";
+export const EMAIL_API_URL = process.env.EMAIL_API_URL ?? "";
+export const EMAIL_API_KEY = process.env.EMAIL_API_KEY ?? "";
+export const EMAIL_FROM = process.env.EMAIL_FROM ?? "MedNotice India <no-reply@mednotice.in>";
+export const EMAIL_SIMULATE = process.env.EMAIL_SIMULATE === "1";
 /** One-time password lifetime in seconds. */
 export const OTP_TTL_SECONDS = Math.max(60, Number(process.env.OTP_TTL_SECONDS ?? 300));
 /** Wrong-code attempts allowed before a challenge is burnt. */

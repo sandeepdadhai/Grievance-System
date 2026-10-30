@@ -331,6 +331,7 @@ CREATE INDEX IF NOT EXISTS idx_users_aadhaar_hash ON users(aadhaar_hash);
 CREATE TABLE IF NOT EXISTS otp_challenges (
   id TEXT PRIMARY KEY,
   purpose TEXT NOT NULL,
+  channel TEXT NOT NULL DEFAULT 'SMS',
   user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
   phone_hash TEXT NOT NULL,
   phone_enc TEXT NOT NULL,
@@ -345,6 +346,9 @@ CREATE TABLE IF NOT EXISTS otp_challenges (
 
 CREATE INDEX IF NOT EXISTS idx_otp_lookup ON otp_challenges(purpose, phone_hash, created_at);
 `);
+
+/** Delivery channel of a one-time password: SMS to a mobile, EMAIL to a mailbox. */
+ensureColumn("otp_challenges", "channel", "TEXT");
 
 export function nowIso(): string {
   return new Date().toISOString();

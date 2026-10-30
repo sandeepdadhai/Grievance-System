@@ -46,14 +46,15 @@ credentials exist, exactly like the WhatsApp channel:
 
 | Feature | Endpoint | Behaviour now |
 | --- | --- | --- |
-| SMS one-time-password login | `POST /api/auth/otp/request`, `POST /api/auth/otp/verify` | 6-digit code, 5-minute TTL, 5 attempts; written to `/var/lib/mednotice/outbox/sms-*.txt` and echoed as `devCode` because `SMS_API_URL`/`SMS_API_KEY` are unset |
+| One-time-password login | `POST /api/auth/otp/request`, `POST /api/auth/otp/verify` | One field takes a mobile number or an email address; 6-digit code, 5-minute TTL, 5 attempts. SMS goes to `/var/lib/mednotice/outbox/sms-*.txt`, email to `email-*.txt`, both echoed as `devCode` because no gateway is configured |
 | Aadhaar verification | `POST /api/auth/aadhaar/request`, `POST /api/auth/aadhaar/verify` | 12-digit number + Verhoeff checksum, then an OTP to the mobile number on the account; stored AES-256-GCM encrypted with only `XXXX XXXX 1234` ever displayed |
 | Aadhaar gate on submissions | `POST /api/cases` | A signed-in patient without a verified Aadhaar gets `403` with `details.code = AADHAAR_REQUIRED`; guest submissions stay anonymous and are unaffected |
 
 The demo patient accounts are seeded with a mobile number and a verified dummy
 Aadhaar (`USR-PATIENT` → `9810000123`, `XXXX XXXX 2644`). To send real SMS, put
 `SMS_PROVIDER=generic`, `SMS_API_URL`, `SMS_API_KEY` (or the `SMS_TWILIO_*` trio)
-in `/etc/mednotice.env` and restart; see `.env.example`.
+in `/etc/mednotice.env` and restart; for email sign-in set `EMAIL_API_URL` and
+`EMAIL_API_KEY` the same way. See `.env.example`.
 
 ```bash
 set -a; . ../.env; set +a          # AWS_ACCESS_KEY_ID / SECRET / AWS_DEFAULT_REGION

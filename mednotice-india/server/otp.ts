@@ -9,13 +9,18 @@ import { get, nowIso, run } from "./db.js";
 import { encryptField, hashToken, randomCode, sha256Hex, timingSafeEqualStr } from "./crypto.js";
 import { HttpError } from "./http.js";
 import { sendSms } from "./sms.js";
+import { sendEmail } from "./email.js";
 
 /** Why a one-time password was issued. */
 export type OtpPurpose = "LOGIN" | "AADHAAR";
 
+/** How a one-time password reaches the account holder. */
+export type OtpChannel = "SMS" | "EMAIL";
+
 export type ChallengeRow = {
   id: string;
   purpose: string;
+  channel: string;
   user_id: string | null;
   phone_hash: string;
   phone_enc: string;
@@ -55,18 +60,31 @@ export function hashMobile(digits: string): string {
   return sha256Hex(`mobile:${digits}`);
 }
 
+/**
+ * Deterministic lookup hash for whichever identifier was used. Mobile numbers
+ * and mailboxes are namespaced so the two can never collide.
+ */
+export function hashIdentifier(channel: OtpChannel, identifier: string): string {
+  return channel === "EMAIL" ? sha256Hex(`email:${identifier.trim().toLowerCase()}`) : hashMobile(identifier);
+}
+
 export function findUserIdByMobile(digits: string): string | null {
   const row = get<{ id: string }>("SELECT id FROM users WHERE phone_hash = ? LIMIT 1", hashMobile(digits));
   return row?.id ?? null;
 }
 
-/** Number of challenges issued to this number in the trailing window. */
-export function recentChallengeCount(purpose: OtpPurpose, phone: string, windowMs: number): number {
+/** Number of challenges issued to this identifier in the trailing window. */
+export function recentChallengeCount(
+  purpose: OtpPurpose,
+  identifier: string,
+  windowMs: number,
+  channel: OtpChannel = "SMS",
+): number {
   const since = new Date(Date.now() - windowMs).toISOString();
   const row = get<{ n: number }>(
     "SELECT COUNT(*) AS n FROM otp_challenges WHERE purpose = ? AND phone_hash = ? AND created_at >= ?",
     purpose,
-    hashMobile(phone),
+    hashIdentifier(channel, identifier),
     since,
   );
   return Number(row?.n ?? 0);
@@ -96,23 +114,30 @@ export type CreatedChallenge = {
 
 export async function createChallenge(opts: {
   purpose: OtpPurpose;
-  phone: string;
+  /** Mobile number or email address the code is delivered to. */
+  identifier: string;
+  /** Delivery channel; SMS unless the identifier is an email address. */
+  channel?: OtpChannel;
   userId: string | null;
   /** Extra encrypted context, e.g. the pending Aadhaar number. */
   payload?: string | null;
   message: (code: string) => string;
+  /** Subject line used by the email channel. */
+  subject?: string;
 }): Promise<CreatedChallenge> {
+  const channel: OtpChannel = opts.channel ?? "SMS";
   const id = `OTP-${randomCode(10)}`;
   const code = numericCode(OTP_LENGTH);
   const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000).toISOString();
   run(
-    `INSERT INTO otp_challenges (id, purpose, user_id, phone_hash, phone_enc, code_hash, payload_enc, attempts, max_attempts, expires_at, consumed_at, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, ?)`,
+    `INSERT INTO otp_challenges (id, purpose, channel, user_id, phone_hash, phone_enc, code_hash, payload_enc, attempts, max_attempts, expires_at, consumed_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, ?)`,
     id,
     opts.purpose,
+    channel,
     opts.userId,
-    hashMobile(opts.phone),
-    encryptField(opts.phone),
+    hashIdentifier(channel, opts.identifier),
+    encryptField(opts.identifier),
     codeHash(id, code),
     opts.payload ? encryptField(opts.payload) : null,
     OTP_MAX_ATTEMPTS,
@@ -120,7 +145,16 @@ export async function createChallenge(opts: {
     nowIso(),
   );
 
-  const delivery = await sendSms({ to: opts.phone, text: opts.message(code), kind: opts.purpose });
+  const text = opts.message(code);
+  const delivery =
+    channel === "EMAIL"
+      ? await sendEmail({
+          to: opts.identifier,
+          subject: opts.subject ?? "Your MedNotice India one-time password",
+          text,
+          kind: opts.purpose,
+        })
+      : await sendSms({ to: opts.identifier, text, kind: opts.purpose });
   if (delivery.error) {
     // A challenge nobody can read is useless: retire it so a retry starts clean.
     run("UPDATE otp_challenges SET consumed_at = ? WHERE id = ?", nowIso(), id);
