@@ -16,6 +16,15 @@ const DEMOS = [
 /** Mobile number on the demo patient account, for the OTP sign-in walkthrough. */
 const DEMO_MOBILE = "9810000123";
 
+/**
+ * Test numbers accepted by the OTP form. Only these numbers have accounts, so
+ * the endpoint cannot be turned into a way of texting an arbitrary mobile.
+ */
+const TEST_MOBILES = [
+  { phone: DEMO_MOBILE, label: "Demo patient" },
+  { phone: "9810000124", label: "Rahul Verma (Hindi case)" },
+];
+
 type Mode = "password" | "otp";
 
 export default function Login() {
@@ -59,8 +68,11 @@ export default function Login() {
     setBusy(true);
     setError(null);
     try {
-      setChallenge(await startOtp(phone));
-      setCode("");
+      const next = await startOtp(phone);
+      setChallenge(next);
+      // Simulation mode hands the code back so a tester can finish the flow;
+      // a live gateway returns no devCode and the field stays empty.
+      setCode(next.devCode ?? "");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -227,6 +239,29 @@ export default function Login() {
               <button className="btn primary block" disabled={busy} type="submit">
                 {busy ? <span className="spinner" /> : "Send one-time password"}
               </button>
+              <div className="label" style={{ marginBottom: 6 }}>Test numbers — tap to fill</div>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                {TEST_MOBILES.map((t) => (
+                  <button
+                    key={t.phone}
+                    className="btn ghost sm"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setPhone(t.phone);
+                      setError(null);
+                    }}
+                  >
+                    <span className="mono">{t.phone}</span>
+                    <span className="faint"> · {t.label}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="tiny faint" style={{ marginTop: 8 }}>
+                With no SMS gateway configured the six-digit code is returned by the server and filled in for you on the next
+                screen, so the flow can be walked end to end. Live delivery needs <span className="mono">SMS_PROVIDER</span> set in
+                the server environment.
+              </p>
             </form>
           )}
 

@@ -25,6 +25,13 @@ type SubmissionResult = {
 const ACCEPT = ".pdf,.jpg,.jpeg,.png,.dcm,application/pdf,image/jpeg,image/png,application/dicom,text/plain";
 
 /**
+ * Verhoeff-valid sandbox Aadhaar numbers, matching the demo patient accounts
+ * seeded on the server. Any valid number is accepted for a signed-in patient;
+ * these are simply convenient values to paste when trying the flow.
+ */
+const TEST_AADHAAR = ["4829 1573 2644", "6730 4825 1985"];
+
+/**
  * Advisory digest for the client-side pre-screen.
  *
  * `crypto.subtle` only exists in a secure context (HTTPS or localhost). On a
@@ -177,7 +184,9 @@ export default function Submit() {
         { aadhaar },
       );
       setAadhaarChallenge({ id: res.challengeId, devCode: res.devCode, masked: res.masked, sentTo: res.sentTo });
-      setAadhaarCode("");
+      // Simulation mode hands the code back so a tester can finish the flow; a live
+      // gateway returns no devCode and the field stays empty for the patient to type.
+      setAadhaarCode(res.devCode ?? "");
     } catch (err) {
       setAadhaarError((err as Error).message);
     } finally {
@@ -662,7 +671,34 @@ export default function Submit() {
                         {aadhaarBusy ? <span className="spinner" /> : "Send verification code"}
                       </button>
                     </div>
-                  ) : (
+                  ) : null}
+                  {!aadhaarChallenge && (
+                    <div>
+                      <div className="label" style={{ marginBottom: 6 }}>Test Aadhaar numbers — tap to fill</div>
+                      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                        {TEST_AADHAAR.map((number) => (
+                          <button
+                            key={number}
+                            className="btn ghost sm mono"
+                            type="button"
+                            disabled={aadhaarBusy}
+                            onClick={() => {
+                              setAadhaar(number);
+                              setAadhaarError(null);
+                            }}
+                          >
+                            {number}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="tiny faint" style={{ marginTop: 8, marginBottom: 0 }}>
+                        Sandbox identities for the demo patient accounts. Any Verhoeff-valid number works for your own account, and the
+                        code goes to the mobile number you registered with. With no SMS gateway configured the server returns the code
+                        and it is filled in for you on the next step.
+                      </p>
+                    </div>
+                  )}
+                  {aadhaarChallenge && (
                     <div className="stack" style={{ gap: 10 }}>
                       <p className="small" style={{ margin: 0 }}>
                         Code sent to <strong className="mono">{aadhaarChallenge.sentTo}</strong> for {aadhaarChallenge.masked}. It
