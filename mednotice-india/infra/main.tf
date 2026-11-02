@@ -72,3 +72,16 @@ resource "aws_instance" "app" {
 
   tags = { Name = "mednotice-india", Project = "mednotice-india" }
 }
+
+# Static public IPv4, so the patient and console URLs survive the nightly
+# stop/start. Associating an Elastic IP replaces the auto-assigned public
+# address rather than adding a second one, so it costs exactly what the dynamic
+# address already costs: the free tier covers 750 h/month of public IPv4 for the
+# first 12 months, after that ~US$0.005/h (~US$3.65/month) whether it is
+# dynamic or elastic.
+resource "aws_eip" "app" {
+  domain   = "vpc"
+  instance = aws_instance.app.id
+
+  tags = { Name = "mednotice-india-eip", Project = "mednotice-india" }
+}

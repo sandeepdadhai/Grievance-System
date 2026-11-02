@@ -1,7 +1,8 @@
 # Deploying mednotice-india to AWS EC2
 
-Live demo (deployed from this directory): **http://13.238.116.94/** — Sydney,
-`t3.micro`, no custom domain, plain HTTP.
+Live demo (deployed from this directory): **http://13.238.120.205/** — Sydney,
+`t3.micro`, no custom domain, plain HTTP. That is still the rotating dynamic
+address; run `./elastic-ip.sh` (below) to pin it permanently.
 
 The MedNotice Global instance (`i-085640db7a6f9ead8`) was **terminated on
 2026-10-28**; its code stays in the repository but nothing is deployed for it.
@@ -34,10 +35,51 @@ aws ec2 describe-instances --region ap-southeast-2 --instance-ids i-09591a814f56
   --query 'Reservations[0].Instances[0].PublicIpAddress' --output text
 ```
 
-Note there is **no Elastic IP** (`ec2:AllocateAddress` is denied), so the public
-address changes whenever the instance is stopped and started. Resolve it with
-the command above; `PUBLIC_URL` in `/etc/mednotice.env` should be updated to
-match if you want WhatsApp links to stay valid.
+`PUBLIC_URL` in `/etc/mednotice.env` must match, which is exactly what the
+Elastic IP below is for.
+
+## Elastic IP (static address)
+
+The nightly stop/start hands out a new public address each morning, so the
+original plan left the URLs moving. `elastic-ip.sh` pins one address instead:
+
+```bash
+set -a; . ../.env; set +a      # AWS_ACCESS_KEY_ID / SECRET / AWS_DEFAULT_REGION
+./elastic-ip.sh                # allocate (or reuse) + associate, idempotent
+```
+
+It prints the address, then you point the deploy script at it and redeploy:
+
+```bash
+# scripts/deploy.sh
+SSH_HOST="<the address>"
+PUBLIC_URL="http://<the address>"
+```
+
+```bash
+npm run deploy                 # rebuilds both bundles with the new console URL
+```
+
+**Free tier.** An Elastic IP *replaces* the auto-assigned public IPv4 instead of
+adding a second one, so it is the same single address the instance already has:
+the EC2 free tier covers 750 h/month of public IPv4 for the first 12 months, and
+after that it is ~US$0.005/h (~US$3.65/month) — identical to the dynamic address,
+not an extra charge. The instance runs ~365 h/month; the stopped hours still
+count against the 750 h because the address stays attached, so the monthly total
+is ~730 h and fits.
+
+**Permissions.** This account's IAM user previously had `ec2:AllocateAddress`
+denied, which is why the first deployment had none. `iam-policy.json` in this
+directory now includes `ec2:DescribeAddresses`, `ec2:AllocateAddress`,
+`ec2:AssociateAddress`, `ec2:DisassociateAddress` and `ec2:ReleaseAddress`;
+attach that policy to the user (or grant just those five actions), then run the
+script. `terraform apply` creates the same address from `aws_eip.app` if you
+prefer Terraform. No script, console-only equivalent: **EC2 → Elastic IPs →
+Allocate Elastic IP address → Associate Elastic IP address →** instance
+`i-09591a814f5600b70`.
+
+To undo it: disassociate and release in the console (an unassociated Elastic IP
+is billed the same daily rate, so don't leave one lying around).
 
 ## Patient identity: SMS OTP and Aadhaar
 
@@ -60,7 +102,7 @@ in `/etc/mednotice.env` and restart; for email sign-in set `EMAIL_API_URL` and
 set -a; . ../.env; set +a          # AWS_ACCESS_KEY_ID / SECRET / AWS_DEFAULT_REGION
 export PATH="/tmp/bin:$PATH"       # terraform 1.9.8 installed under /tmp/bin
 terraform init
-terraform apply                    # key pair + instance (see "what this account allows")
+terraform apply                    # key pair + instance + Elastic IP (see "what this account allows")
 ./verify.sh 13.238.116.94 ../infra/terraform-key.pem
 ```
 
@@ -210,4 +252,5 @@ admin.example.org {
   after pushing.
 * **SSH and the app port are open to `0.0.0.0/0`.** Restrict with
   `var.ssh_cidr`, and drop the 4100 rule once Caddy is the only entry point.
-* No Elastic IP: the public address changes if the instance is stopped and started.
+* **The address is dynamic until `./elastic-ip.sh` is run.** Once the Elastic IP is attached the URL stops
+  changing across the nightly stop/start; before that every start invalidates links already sent.

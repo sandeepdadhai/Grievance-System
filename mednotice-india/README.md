@@ -337,8 +337,8 @@ terraform apply -var="git_commit=$(git -C .. rev-parse HEAD)"
 
 The instance stops itself nightly and is restarted by `.github/workflows/ec2-schedule.yml` to stay inside the AWS
 free tier. Read **[infra/README.md](infra/README.md)** before using it: it documents the org SCP restrictions, the
-resources created outside Terraform, the free-tier power schedule, and why the public IP changes on every start
-(there is no Elastic IP).
+resources created outside Terraform, the free-tier power schedule, and how `infra/elastic-ip.sh` pins the public
+address with an Elastic IP so the URLs survive the nightly restart.
 
 > This deployment currently serves the patient app on port 80. To also expose the staff console, add the Caddy
 > `:8080` block from route B and open that port in the security group.
