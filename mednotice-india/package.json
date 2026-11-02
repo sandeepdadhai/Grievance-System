@@ -8,11 +8,15 @@
     "node": ">=22.5"
   },
   "scripts": {
-    "dev": "concurrently -n api,web -c blue,magenta \"npm:dev:api\" \"npm:dev:web\"",
+    "dev": "concurrently -n api,web,admin -c blue,magenta,yellow \"npm:dev:api\" \"npm:dev:web\" \"npm:dev:web:admin\"",
     "dev:api": "tsx watch server/index.ts",
     "dev:web": "vite --config client/vite.config.ts",
-    "build": "vite build --config client/vite.config.ts && tsc -p tsconfig.server.json",
+    "dev:web:admin": "vite --config client/vite.admin.config.ts",
+    "build": "npm run build:patient && npm run build:admin && tsc -p tsconfig.server.json",
+    "build:patient": "vite build --config client/vite.config.ts",
+    "build:admin": "vite build --config client/vite.admin.config.ts",
     "start": "node dist/server/index.js",
+    "start:admin": "node dist/server/admin.js",
     "share": "bash scripts/share.sh",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test tests/*.test.ts",

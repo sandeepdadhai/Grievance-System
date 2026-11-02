@@ -2,16 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth, type OtpChallenge } from "../auth";
 import { Alert, Icon } from "../components/ui";
-
-const DEMOS = [
-  { email: "admin@mednotice.in", password: "Admin!2345", label: "Super Administrator", org: "MedNotice India" },
-  { email: "reviewer@mohfw.gov.in", password: "Review!2345", label: "Ministry Reviewer", org: "India · MoHFW" },
-  { email: "compliance@aiims.edu", password: "Comply!2345", label: "Hospital Compliance", org: "India · AIIMS" },
-  { email: "facility.aiims@mednotice.in", password: "Facility!2345", label: "Facility officer", org: "AIIMS New Delhi" },
-  { email: "facility.kem@mednotice.in", password: "Facility!2345", label: "Facility officer", org: "KEM Mumbai" },
-  { email: "auditor@mednotice.in", password: "Audit!2345", label: "System Auditor", org: "Read-only" },
-  { email: "patient@demo.in", password: "Patient!2345", label: "Patient", org: "India · demo patient" },
-];
+import { STAFF_CONSOLE_URL } from "../components/Layout";
 
 /** Mobile number on the demo patient account, for the OTP sign-in walkthrough. */
 const DEMO_MOBILE = "9810000123";
@@ -29,7 +20,7 @@ const TEST_IDENTITIES = [
 ];
 
 export default function Login() {
-  const { login, startOtp, loginWithOtp, user } = useAuth();
+  const { startOtp, loginWithOtp, user } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [identifier, setIdentifier] = useState("");
@@ -45,21 +36,15 @@ export default function Login() {
   };
 
   useEffect(() => {
-    if (user) navigate(destination(user.baseRole), { replace: true });
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function signIn(nextEmail: string, nextPassword: string) {
-    setBusy(true);
-    setError(null);
-    try {
-      const next = await login(nextEmail, nextPassword);
-      navigate(destination(next.baseRole), { replace: true });
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
+    if (!user) return;
+    // Staff and authority accounts sign in on the separately deployed console;
+    // the patient application has no staff pages at all.
+    if (user.baseRole !== "PATIENT") {
+      window.location.assign(`${STAFF_CONSOLE_URL}/login`);
+      return;
     }
-  }
+    navigate(destination(user.baseRole), { replace: true });
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function sendCode(e: FormEvent) {
     e.preventDefault();
@@ -222,26 +207,10 @@ export default function Login() {
           )}
 
           <div className="divider" />
-          <details>
-            <summary className="label" style={{ marginBottom: 8, cursor: "pointer" }}>
-              Staff demo sign-in · email &amp; password
-            </summary>
-            <div className="demo-accounts">
-            {DEMOS.map((d) => (
-              <button
-                key={d.email}
-                className="btn ghost sm"
-                style={{ justifyContent: "space-between", width: "100%" }}
-                disabled={busy}
-                onClick={() => void signIn(d.email, d.password)}
-                type="button"
-              >
-                <span>{d.label} <span className="faint">· {d.org}</span></span>
-                <span className="mono tiny faint">{d.email.split("@")[0]}</span>
-              </button>
-            ))}
-            </div>
-          </details>
+          <p className="small muted" style={{ marginTop: 0 }}>
+            Staff, ministry and facility officers sign in on the separate staff console at{" "}
+            <a href={`${STAFF_CONSOLE_URL}/login`} className="mono">{STAFF_CONSOLE_URL}</a>. Patient accounts cannot open it.
+          </p>
           <p className="tiny faint" style={{ marginTop: 10 }}>
             One-time password demo: <span className="mono">{DEMO_MOBILE}</span> or <span className="mono">patient@demo.in</span> on
             the demo patient account. In simulation the code is written to the server outbox and filled in for you on the next

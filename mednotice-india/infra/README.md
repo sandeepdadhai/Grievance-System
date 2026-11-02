@@ -167,6 +167,38 @@ Deployed from commit `99e3a70` ("Notify registered patients over WhatsApp when a
 | Communications log | `/api/admin/communications` lists both messages with the masked target and `NOTIFICATION_SENT` audit link |
 | SSM agent | snap active, "Set up control channel successfully" |
 
+## Staff console (separate frontend)
+
+`npm run build` produces two bundles: `client/dist/patient` (public) and `client/dist/admin` (staff).
+They are served by two processes from the same code and the same database:
+
+```bash
+systemctl status mednotice        # patient app + API on :4100 (public via Caddy)
+systemctl status mednotice-admin  # staff console + API on 127.0.0.1:4101 (loopback only)
+```
+
+To use the console, tunnel the loopback port and open it locally — nothing on 4101 is reachable from
+the internet, because the process binds to loopback and the security group does not open that port:
+
+```bash
+ssh -i infra/terraform-key.pem -L 4101:127.0.0.1:4101 ubuntu@<public-ip>
+# then http://localhost:4101 — staff accounts only, patient accounts are signed out
+```
+
+If several staff members need browser access, publish it through Caddy with an extra restriction and
+set the matching app-level values in `/etc/mednotice.env` (`ADMIN_ALLOWED_IPS`, or
+`ADMIN_BASIC_USER` + `ADMIN_BASIC_PASSWORD`):
+
+```caddy
+admin.example.org {
+	basic_auth {
+		# caddy hash-password --plaintext 'choose-a-strong-password'
+		ops <bcrypt-hash>
+	}
+	reverse_proxy 127.0.0.1:4101
+}
+```
+
 ## Known limitations
 
 * **Plain HTTP only.** Caddy is serving `:80`; Let's Encrypt cannot issue a certificate for an

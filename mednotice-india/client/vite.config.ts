@@ -24,7 +24,9 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(import.meta.dirname, "dist"),
+    // Patient bundle only. The staff console is built by vite.admin.config.ts
+    // into dist/admin and served from its own origin.
+    outDir: path.resolve(import.meta.dirname, "dist", "patient"),
     emptyOutDir: true,
   },
 });

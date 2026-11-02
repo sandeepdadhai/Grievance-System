@@ -4,6 +4,13 @@ import { useAuth } from "../auth";
 import { ChatWidget } from "./ChatWidget";
 import { Icon } from "./ui";
 
+/**
+ * The staff console is a separate deployment. `VITE_ADMIN_URL` sets its origin
+ * at build time; the default matches the console port in server/admin.ts, which
+ * is bound to loopback and reached through an SSH tunnel on this deployment.
+ */
+export const STAFF_CONSOLE_URL = ((import.meta.env.VITE_ADMIN_URL as string | undefined) ?? "http://localhost:4101").replace(/\/+$/, "");
+
 function Brand() {
   return (
     <Link to="/" className="brand">
@@ -27,12 +34,11 @@ export function PublicLayout() {
           <NavLink to="/submit">File a grievance</NavLink>
           <NavLink to="/track">Track a case</NavLink>
           <NavLink to="/community">Community</NavLink>
-          {user && user.baseRole !== "PATIENT" && <NavLink to="/admin">Console</NavLink>}
         </nav>
         <div className="row" style={{ gap: 8 }}>
           {user ? (
             <>
-              <Link to={user.baseRole === "PATIENT" ? "/portal" : "/admin"} className="btn sm ghost">My workspace</Link>
+              <Link to={user.baseRole === "PATIENT" ? "/portal" : STAFF_CONSOLE_URL} className="btn sm ghost">My workspace</Link>
               <LogoutButton />
             </>
           ) : (
@@ -57,7 +63,7 @@ export function PublicLayout() {
           <Link to="/track">Track a case</Link>
           <Link to="/community">Community</Link>
           <Link to="/signup">Patient sign up</Link>
-          <Link to="/login">Staff sign in</Link>
+          <a href={`${STAFF_CONSOLE_URL}/login`}>Staff console</a>
         </div>
       </footer>
       <ChatWidget />
@@ -100,7 +106,7 @@ export function AdminLayout() {
   const { user, logout } = useAuth();
   const location = useLocation();
   if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname)}`} replace />;
-  if (user.baseRole === "PATIENT") return <Navigate to="/portal" replace />;
+  if (user.baseRole === "PATIENT") return <Navigate to="/login" replace />;
 
   const nav = NAV.filter((item) => {
     if (item.to === "/admin/facility") return Boolean(user.facilityId);

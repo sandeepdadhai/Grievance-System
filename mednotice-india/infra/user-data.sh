@@ -64,6 +64,10 @@ cat > /etc/mednotice.env <<'ENV'
 NODE_ENV=production
 DATA_DIR=/var/lib/mednotice
 PORT=4100
+# Staff console: loopback only. Reach it with
+#   ssh -L 4101:127.0.0.1:4101 ubuntu@<public-ip>   then open http://localhost:4101
+ADMIN_HOST=127.0.0.1
+ADMIN_PORT=4101
 ENV
 chmod 600 /etc/mednotice.env
 
@@ -86,8 +90,28 @@ RestartSec=5
 WantedBy=multi-user.target
 UNIT
 
+cat > /etc/systemd/system/mednotice-admin.service <<'UNIT'
+[Unit]
+Description=MedNotice India staff console (separate frontend, loopback only)
+After=network-online.target mednotice.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/srv/mednotice/Grievance-System/mednotice-india
+EnvironmentFile=/etc/mednotice.env
+ExecStart=/usr/bin/node dist/server/admin.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 systemctl daemon-reload
 systemctl enable --now mednotice
+systemctl enable --now mednotice-admin
 
 # --------------------------------------------- reverse proxy (HTTP for now)
 apt-get install -y debian-keyring debian-archive-keyring apt-transport-https

@@ -13,5 +13,12 @@
     "types": ["node"],
     "allowImportingTsExtensions": true
   },
-  "include": ["server/**/*.ts", "client/src/**/*.ts", "client/src/**/*.tsx", "tests/**/*.ts", "client/vite.config.ts"]
+  "include": [
+    "server/**/*.ts",
+    "client/src/**/*.ts",
+    "client/src/**/*.tsx",
+    "tests/**/*.ts",
+    "client/vite.config.ts",
+    "client/vite.admin.config.ts"
+  ]
 }

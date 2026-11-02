@@ -6,7 +6,9 @@
 #
 # What it does, in order:
 #   1. installs dependencies if node_modules is missing
-#   2. builds the SPA (client/dist) and the API (dist/server)
+#   2. builds both front ends (client/dist/patient, client/dist/admin) and the API (dist/server)
+#      — this script publishes the PATIENT app only; the staff console is started
+#        separately with `npm run start:admin` and is never exposed by the tunnel
 #   3. restarts the API on $PORT — sessions live in SQLite, so nobody is logged out
 #   4. reuses the tunnel that is already running, so the public URL does NOT change
 #      (a tunnel is only started when there is no live one, or when it stopped answering)

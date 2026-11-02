@@ -297,7 +297,16 @@ CREATE INDEX IF NOT EXISTS idx_community_comments_status ON community_comments(s
 /** Additive column migration for databases created before a field existed. */
 function ensureColumn(table: string, column: string, ddl: string): void {
   const columns = all<{ name: string }>(`PRAGMA table_info(${table})`);
-  if (!columns.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  if (columns.some((c) => c.name === column)) return;
+  try {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  } catch (err) {
+    // The patient app and the staff console are separate processes sharing one
+    // database. If both start on a fresh file, the loser of the ALTER sees the
+    // column already present — that is success, not a failure to migrate.
+    const after = all<{ name: string }>(`PRAGMA table_info(${table})`);
+    if (!after.some((c) => c.name === column)) throw err;
+  }
 }
 
 ensureColumn("users", "consent_at", "TEXT");

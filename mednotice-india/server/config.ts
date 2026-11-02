@@ -8,6 +8,29 @@ export const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR
 export const STORAGE_DIR = path.join(DATA_DIR, "storage");
 export const OUTBOX_DIR = path.join(DATA_DIR, "outbox");
 export const PORT = Number(process.env.PORT ?? 4100);
+
+/**
+ * Staff console — a second process serving its own bundle from its own origin so
+ * it can be restricted independently of the public patient application. It
+ * shares the same database, storage and outbox as the patient service.
+ *
+ * The default bind address is loopback: the console is reachable only through an
+ * SSH tunnel (or a reverse proxy you add deliberately), never from the internet.
+ */
+export const ADMIN_HOST = process.env.ADMIN_HOST ?? "127.0.0.1";
+export const ADMIN_PORT = Number(process.env.ADMIN_PORT ?? 4101);
+/** Comma-separated client IPs allowed to reach the console. Empty means no IP filter. */
+export const ADMIN_ALLOWED_IPS = (process.env.ADMIN_ALLOWED_IPS ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+/** Optional HTTP Basic challenge in front of the console origin (both must be set). */
+export const ADMIN_BASIC_USER = process.env.ADMIN_BASIC_USER ?? "";
+export const ADMIN_BASIC_PASSWORD = process.env.ADMIN_BASIC_PASSWORD ?? "";
+
+/** Built single-page bundles, produced by client/vite*.config.ts. */
+export const PATIENT_DIST = path.join(ROOT, "client", "dist", "patient");
+export const ADMIN_DIST = path.join(ROOT, "client", "dist", "admin");
 export const IS_PROD = process.env.NODE_ENV === "production";
 export const SESSION_COOKIE = "mni_session";
 export const SESSION_TTL_MS = 1000 * 60 * 60 * 12;

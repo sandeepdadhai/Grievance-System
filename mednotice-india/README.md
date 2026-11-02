@@ -22,9 +22,12 @@ npm run dev          # API on :4100 + Vite on :3001
 Production build:
 
 ```bash
-npm run build        # client -> client/dist, server -> dist/server
-npm start            # Express serves the SPA and the API on :4100
+npm run build        # patient -> client/dist/patient, staff console -> client/dist/admin, server -> dist/server
+npm start            # patient app + API on :4100 (the public origin)
+npm run start:admin  # staff console + API on 127.0.0.1:4101 (restricted)
 ```
+
+The two front ends are separate bundles and separate deployments — see "Patient app and staff console" below.
 
 Tests and typecheck:
 
@@ -36,6 +39,35 @@ npm run typecheck
 Node 22.5+ is required (the project uses the built-in `node:sqlite` module, so there is no native dependency).
 
 If you run this project beside the global one, keep the port split: global uses 3000/4000, India uses 3001/4100.
+
+---
+
+## Patient app and staff console (two deployments)
+
+The project builds two independent front ends from one codebase and one API:
+
+| Bundle | Entry | Served by | Default origin |
+| --- | --- | --- | --- |
+| Patient application | `client/index.html` | `server/index.ts` | `:4100`, public |
+| Staff console | `client/admin.html` | `server/admin.ts` | `127.0.0.1:4101`, loopback only |
+
+Both processes use the same SQLite database, storage and outbox. The console bundle contains no patient
+pages and the patient bundle contains no console pages, so what an anonymous visitor downloads never
+includes the staff UI. The console keeps its `/admin/...` URLs on its own origin, so `/` redirects to
+`/admin` there.
+
+Restricting the console:
+
+* `ADMIN_HOST` (default `127.0.0.1`) and `ADMIN_PORT` (default `4101`).
+* Reach it without exposing it: `ssh -L 4101:127.0.0.1:4101 ubuntu@<host>`, then open `http://localhost:4101`.
+* `ADMIN_ALLOWED_IPS=203.0.113.4,198.51.100.7` rejects other client addresses with 403.
+* `ADMIN_BASIC_USER` + `ADMIN_BASIC_PASSWORD` add an HTTP Basic challenge in front of the whole origin;
+  setting only one of them fails closed.
+* The link in the patient app comes from `VITE_ADMIN_URL`, read at build time:
+  `VITE_ADMIN_URL=https://admin.example.org npm run build:patient`.
+
+Role checks on `/api/admin/*` remain the real authorization: hiding a bundle grants nothing, and a
+patient session opened on the console origin is signed out and shown the staff sign-in form.
 
 ---
 
@@ -58,7 +90,7 @@ Runtime state and logs it manages (all inside the git-ignored `data/` and `artif
 | `data/tunnel-url.txt` | the current public URL |
 | `artifacts/share-link.txt` | human-readable link sheet (URL, build time, demo logins) |
 
-If you only touched React code you can run `npm run build` on its own — Express reads `client/dist` from disk — but `npm run share` is the safe default because a server-side change needs the restart.
+If you only touched React code you can run `npm run build` on its own — the patient app reads `client/dist/patient` and the console reads `client/dist/admin` from disk — but `npm run share` is the safe default because a server-side change needs the restart.
 
 ### Why the free `*.trycloudflare.com` link changes
 
