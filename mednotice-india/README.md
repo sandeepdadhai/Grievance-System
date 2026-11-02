@@ -11,32 +11,466 @@ This is a standalone project. The multi-jurisdictional version lives alongside i
 
 ---
 
-## Quick start
+## Setup guide — from zero to running
+
+Pick one route:
+
+| Route | Time | Use it when |
+| --- | --- | --- |
+| [A. Laptop](#a-run-it-on-your-own-machine) | 5 minutes | you want to see the platform working |
+| [B. One server](#b-deploy-to-a-linux-server-the-quick-way) | 15 minutes | you want a permanent URL you control |
+| [C. AWS EC2 with Terraform](#c-deploy-to-aws-ec2-automatically) | 15 minutes | you want the cloud instance this project was built for |
+
+Nothing is needed beyond Node.js: the app uses the built-in `node:sqlite` module, stores files on disk and runs
+the WhatsApp/SMS/email channels in simulation until you add credentials. No database server, no API key, no
+cloud account.
+
+---
+
+### Dependencies
+
+| Dependency | Version | Needed for | Install |
+| --- | --- | --- | --- |
+| **Node.js** | **22.5+** (24 recommended) | the API and both UI builds | see below |
+| **npm** | 10+ | install + scripts | ships with Node |
+| **git** | any | cloning the repository | `sudo apt-get install -y git` |
+| Caddy | 2.x | *optional* — reverse proxy on port 80/443 in production | `sudo apt-get install -y caddy` |
+| Terraform | 1.5+ | *optional* — route C only | see [route C](#c-deploy-to-aws-ec2-automatically) |
+| AWS CLI | 2.x | *optional* — route C only | see [route C](#c-deploy-to-aws-ec2-automatically) |
+| cloudflared | any | *optional* — `npm run share` instant public URL (downloaded by the script) | none |
+
+**Ubuntu / Debian**
 
 ```bash
-npm install
-npm run dev          # API on :4100 + Vite on :3001
-# open http://localhost:3001
+sudo apt-get update
+sudo apt-get install -y git curl
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+sudo apt-get install -y nodejs
+node -v      # must print v22.5.0 or higher
 ```
 
-Production build:
+**macOS**
 
 ```bash
-npm run build        # patient -> client/dist/patient, staff console -> client/dist/admin, server -> dist/server
-npm start            # patient app + API on :4100 (the public origin)
-npm run start:admin  # staff console + API on 127.0.0.1:4101 (restricted)
+brew install node@24 git
+node -v
 ```
 
-The two front ends are separate bundles and separate deployments — see "Patient app and staff console" below.
+**Windows** — install the Node 24 LTS installer from nodejs.org, then work inside **WSL2** (Ubuntu) or Git Bash.
+Every command below is bash; `node -v` must print v22.5.0 or higher.
 
-Tests and typecheck:
+---
+
+### A. Run it on your own machine
 
 ```bash
-npm test             # 60 unit + end-to-end tests (node:test via tsx)
-npm run typecheck
+# 1. get the code
+git clone https://github.com/sandeepdadhai/Grievance-System.git
+cd Grievance-System/mednotice-india
+
+# 2. install (reproducible, uses package-lock.json)
+npm ci
+
+# 3. optional configuration — every value already has a working default
+cp .env.example .env
+
+# 4. start everything
+npm run dev
 ```
 
-Node 22.5+ is required (the project uses the built-in `node:sqlite` module, so there is no native dependency).
+| URL | What is there |
+| --- | --- |
+| <http://localhost:3001> | patient application (hot reload) |
+| <http://localhost:3002> | staff console — separate bundle, separate dev server |
+| <http://localhost:4100/api/health> | the API both UIs talk to |
+
+The database, uploads and outbox are created under `mednotice-india/data/` on first start and seeded with demo
+accounts. Sign in to the console with `admin@mednotice.in` / `Admin!2345` (full list under [Demo accounts](#demo-accounts)).
+
+In development the patient app links to the console through `VITE_ADMIN_URL`, which defaults to the production
+console port `4101`; either open <http://localhost:3002> directly, or run
+`VITE_ADMIN_URL=http://localhost:3002 npm run dev` so the in-app "Staff console" link works too.
+
+**Checks**
+
+```bash
+npm test          # 106 unit + end-to-end tests (node:test via tsx)
+npm run typecheck # TypeScript, no emit
+```
+
+---
+
+### B. Deploy to a Linux server (the quick way)
+
+Works on any Ubuntu 22.04/24.04 box (EC2, Lightsail, Hetzner, a VM on your laptop). It runs two systemd services
+from one checkout — the public patient app and the staff console — behind Caddy.
+
+```bash
+# ---- 1. system packages (Ubuntu 24.04) ----
+sudo apt-get update -y
+sudo apt-get install -y git curl caddy
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# ---- 2. code + build ----
+sudo mkdir -p /srv/mednotice && cd /srv/mednotice
+sudo git clone https://github.com/sandeepdadhai/Grievance-System.git
+cd Grievance-System/mednotice-india
+sudo npm ci --no-audit --no-fund
+sudo env VITE_ADMIN_URL="http://<SERVER-IP>:4101" npm run build
+
+# ---- 3. data directory + configuration ----
+sudo mkdir -p /var/lib/mednotice && sudo chmod 700 /var/lib/mednotice
+sudo tee /etc/mednotice.env >/dev/null <<'ENV'
+NODE_ENV=production
+DATA_DIR=/var/lib/mednotice
+PORT=4100
+ADMIN_HOST=127.0.0.1
+ADMIN_PORT=4101
+# Protect the console origin. Generate a password and set BOTH lines:
+# ADMIN_BASIC_USER=ops
+# ADMIN_BASIC_PASSWORD=replace-me
+# Encrypt everything at rest with a key you keep (see "Data and backups"):
+# MASTER_KEY=
+ENV
+sudo chmod 600 /etc/mednotice.env
+
+# ---- 4. the two services ----
+sudo tee /etc/systemd/system/mednotice.service >/dev/null <<'UNIT'
+[Unit]
+Description=MedNotice India (patient app + API)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/srv/mednotice/Grievance-System/mednotice-india
+EnvironmentFile=/etc/mednotice.env
+ExecStart=/usr/bin/node dist/server/index.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+sudo tee /etc/systemd/system/mednotice-admin.service >/dev/null <<'UNIT'
+[Unit]
+Description=MedNotice India staff console
+After=network-online.target mednotice.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/srv/mednotice/Grievance-System/mednotice-india
+EnvironmentFile=/etc/mednotice.env
+ExecStart=/usr/bin/node dist/server/admin.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now mednotice mednotice-admin
+
+# ---- 5. reverse proxy: port 80 -> patient app ----
+sudo tee /etc/caddy/Caddyfile >/dev/null <<'CADDY'
+:80 {
+	reverse_proxy 127.0.0.1:4100
+}
+CADDY
+sudo systemctl restart caddy
+
+# ---- 6. check it ----
+curl -fsS http://127.0.0.1:4100/api/health
+curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1/
+```
+
+You now have:
+
+| URL | What | Access |
+| --- | --- | --- |
+| `http://<SERVER-IP>/` | patient application | public |
+| `http://127.0.0.1:4101/admin` | staff console | loopback only — reach it with the tunnel below |
+
+**Reaching the console.** It binds to loopback, so it is not reachable from the internet at all. Use an SSH tunnel:
+
+```bash
+ssh -L 4101:127.0.0.1:4101 user@<SERVER-IP>
+# then open http://localhost:4101 in your browser
+```
+
+If staff need a browser URL without SSH, publish it through Caddy on a port you open in the firewall, and keep a
+second gate in front of it:
+
+```caddy
+:8080 {
+	basic_auth {
+		# caddy hash-password --plaintext 'your-password'
+		ops <bcrypt-hash>
+	}
+	reverse_proxy 127.0.0.1:4101
+}
+```
+
+`ADMIN_ALLOWED_IPS=203.0.113.4` (comma-separated) and `ADMIN_BASIC_USER`/`ADMIN_BASIC_PASSWORD` add the same
+protection inside the app, so the console stays closed even if the proxy rule is later removed. Staff-role checks
+on `/api/admin/*` are the real authorization in every case.
+
+**Updating a running server** — after `git push` on your machine:
+
+```bash
+cd /srv/mednotice/Grievance-System
+sudo git fetch origin && sudo git reset --hard origin/main
+cd mednotice-india
+sudo npm ci --no-audit --no-fund
+sudo env VITE_ADMIN_URL="http://<SERVER-IP>:4101" npm run build
+sudo systemctl restart mednotice mednotice-admin
+```
+
+Schema changes are applied automatically at start (`seed()`), and the SQLite file in `DATA_DIR` is kept.
+
+---
+
+### C. Deploy to AWS EC2 automatically
+
+`infra/` contains a complete Terraform deployment: an Ubuntu 24.04 `t3.micro`, a separate 10 GB gp3 data volume,
+a security group, an SSM role, systemd units and Caddy — all installed by `infra/user-data.sh` on first boot.
+
+**Prerequisites**
+
+```bash
+# AWS credentials that may create EC2 resources (put them in mednotice-india/.env)
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_DEFAULT_REGION=ap-southeast-2
+```
+
+Terraform 1.5+ and the AWS CLI must be on `PATH`:
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install -y unzip
+curl -fsSL https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_amd64.zip -o /tmp/tf.zip
+sudo unzip -o /tmp/tf.zip -d /usr/local/bin
+sudo snap install aws-cli --classic   # or: pip install awscli
+terraform -version
+```
+
+**Deploy**
+
+```bash
+cd infra
+set -a; . ../.env; set +a          # export the three AWS_* values
+./bootstrap.sh                     # one-time: SSM role + instance profile + security group
+# put the two ids it prints into terraform.tfvars if they differ from the defaults
+terraform init
+terraform apply                    # creates the instance; user-data.sh installs and starts everything
+./verify.sh "$(terraform output -raw public_ip)" terraform-key.pem
+```
+
+`terraform output` prints the URLs and the SSH command:
+
+```bash
+terraform output app_url_http     # patient app (Caddy on :80)
+terraform output ssh_command      # ssh -i infra/terraform-key.pem ubuntu@<ip>
+```
+
+The boot script pins the commit in `var.git_commit` (`infra/variables.tf`). Set it to the commit you want deployed
+before `terraform apply`:
+
+```bash
+terraform apply -var="git_commit=$(git -C .. rev-parse HEAD)"
+```
+
+The instance stops itself nightly and is restarted by `.github/workflows/ec2-schedule.yml` to stay inside the AWS
+free tier. Read **[infra/README.md](infra/README.md)** before using it: it documents the org SCP restrictions, the
+resources created outside Terraform, the free-tier power schedule, and why the public IP changes on every start
+(there is no Elastic IP).
+
+> This deployment currently serves the patient app on port 80. To also expose the staff console, add the Caddy
+> `:8080` block from route B and open that port in the security group.
+
+---
+
+### Instant public URL (no server, no account)
+
+```bash
+npm run share
+```
+
+That builds both bundles, starts the API, opens a free Cloudflare quick tunnel and prints the public
+`https://….trycloudflare.com` URL (written to `artifacts/share-link.txt`). It publishes the patient app only and
+reuses the running tunnel on every rebuild, so the URL stays the same until the tunnel or machine restarts. Details,
+including a named tunnel for a permanent custom domain: [Rebuilding the site and sharing it on one URL](#rebuilding-the-site-and-sharing-it-on-one-url).
+
+---
+
+### Ports, scripts and layout
+
+| Port | Process | Dev | Production |
+| --- | --- | --- | --- |
+| 3001 | Vite, patient UI | ✓ | — (built files served by the API) |
+| 3002 | Vite, staff console | ✓ | — |
+| 4100 | `server/index.ts` — patient app + API | ✓ | ✓ (public, via Caddy) |
+| 4101 | `server/admin.ts` — console + API | — | ✓ (loopback) |
+
+| Script | What it does |
+| --- | --- | --- |
+| `npm ci` | clean, lockfile-exact dependency install |
+| `npm run dev` | API + patient UI + console UI, all in one terminal |
+| `npm run build` | builds both bundles (`build:patient`, `build:admin`) and compiles the server |
+| `npm start` | runs the patient app + API from `dist/` |
+| `npm run start:admin` | runs the staff console from `dist/` |
+| `npm test` / `npm run typecheck` | test suite / TypeScript check |
+| `npm run seed` | re-applies schema migrations and demo accounts |
+| `npm run share` | build + start + public tunnel URL |
+
+```
+mednotice-india/
+├── client/            React SPA
+│   ├── index.html     patient entry          → dist/patient
+│   ├── admin.html     console entry          → dist/admin
+│   └── src/           pages, components, auth context
+├── server/            Express API (SQLite, no external services)
+│   ├── index.ts       patient app entry
+│   ├── admin.ts       staff console entry
+│   └── routes/        public · auth · cases · documents · admin · community · chat
+├── tests/             106 node:test suites
+├── infra/             Terraform, bootstrap script, user-data, verify script
+└── data/              SQLite DB, uploads, outbox (created on first run, git-ignored)
+```
+
+---
+
+### Configuration reference
+
+All settings are environment variables, read from `.env` in development and `/etc/mednotice.env` in production.
+Everything has a safe default — the demo runs with no configuration at all.
+
+**Core**
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `4100` | patient app + API port |
+| `DATA_DIR` | `./data` | SQLite DB, encrypted uploads, outbox, generated key |
+| `NODE_ENV` | `development` | `production` enables Secure cookies + HSTS — **requires HTTPS** |
+| `PROJECT_ROOT` | `process.cwd()` | override when serving a build from another directory |
+| `MASTER_KEY` | generated `0600` file | 32-byte base64 AES-256 key for encryption at rest. **Set this in production** |
+| `PUBLIC_URL` | — | public origin used in WhatsApp links |
+
+**Staff console**
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ADMIN_HOST` | `127.0.0.1` | bind address of the console process |
+| `ADMIN_PORT` | `4101` | console port |
+| `ADMIN_ALLOWED_IPS` | empty | comma-separated client IPs; everyone else gets 403 |
+| `ADMIN_BASIC_USER` / `ADMIN_BASIC_PASSWORD` | empty | HTTP Basic challenge for the whole console origin; set both or neither |
+| `VITE_ADMIN_URL` | `http://localhost:4101` | **build-time**: where the patient app links for staff sign-in |
+
+**Patient identity**
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AADHAAR_REQUIRED` | `1` | `0` lets submissions through without a verified Aadhaar |
+| `OTP_TTL_SECONDS` | `300` | one-time-password lifetime |
+| `OTP_MAX_ATTEMPTS` | `5` | wrong-code attempts before the code is burned |
+| `SMS_PROVIDER` | `generic` | `generic` (your aggregator) or `twilio` |
+| `SMS_API_URL`, `SMS_API_KEY`, `SMS_SENDER_ID` | — | generic SMS gateway (`Authorization: Bearer`) |
+| `SMS_TWILIO_SID`, `SMS_TWILIO_TOKEN`, `SMS_TWILIO_FROM` | — | Twilio credentials |
+| `SMS_SIMULATE` / `SMS_ENABLED` | `0` / on | force simulation / disable the channel |
+| `EMAIL_API_URL`, `EMAIL_API_KEY`, `EMAIL_FROM` | — | email OTP gateway (Resend, Postmark, SES bridge) |
+| `EMAIL_SIMULATE` / `EMAIL_ENABLED` | `0` / on | force simulation / disable the channel |
+
+**Notifications**
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` | — | switch WhatsApp from simulation to live delivery |
+| `WHATSAPP_TEMPLATE_NAME`, `WHATSAPP_TEMPLATE_LANG` | `mednotice_case_update`, `en` | approved template |
+| `WHATSAPP_API_VERSION` | `v21.0` | Graph API version |
+| `WHATSAPP_DEFAULT_COUNTRY` | `91` | assumed country code |
+| `WHATSAPP_SIMULATE` / `WHATSAPP_ENABLED` | `0` / on | force simulation / disable the channel |
+
+**Background work**
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DISPATCH_CRON_ENABLED` | on | `0` disables routing retries and status pulls (tests use this) |
+| `DISPATCH_INTERVAL_MS` | `60000` | retry tick |
+| `STATUS_SYNC_INTERVAL_MS` | `300000` | how often authority statuses are pulled |
+| `DISPATCH_RETRY_DELAY_MS` | `300000` | backoff base |
+| `DISPATCH_MAX_ATTEMPTS` | `3` | attempts before a transmission is failed |
+| `STATUS_REQUEST_TIMEOUT_MS` | `10000` | outbound status request timeout |
+
+Without credentials every channel writes the exact payload to `DATA_DIR/outbox/` and marks it sent with provider
+`OUTBOX`, so the whole flow is demonstrable offline. See [WhatsApp delivery](#whatsapp-delivery).
+
+---
+
+### First checks after any deployment
+
+```bash
+# 1. API + audit chain
+curl -s http://localhost:4100/api/health
+#    {"status":"ok",...,"auditChain":{"valid":true,...}}
+
+# 2. staff sign-in (cookie is written to /tmp/mn-cookies.txt)
+curl -s -c /tmp/mn-cookies.txt -H 'Content-Type: application/json' \
+  -d '{"email":"admin@mednotice.in","password":"Admin!2345"}' \
+  http://localhost:4100/api/auth/login
+
+# 3. admin API with that session
+curl -s -b /tmp/mn-cookies.txt http://localhost:4100/api/admin/stats | head -c 200
+
+# 4. patient UI is served by the API in production
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:4100/
+```
+
+---
+
+### Troubleshooting
+
+| Symptom | Cause and fix |
+| --- | --- |
+| `Cannot find module 'node:sqlite'` or a syntax error at start | Node is older than 22.5 — install Node 22.5+ and re-run `npm ci` |
+| `EADDRINUSE :4100` | another process owns the port: `lsof -i :4100`, stop it or change `PORT` |
+| Patient UI returns 404 after a restart | the build is missing — run `npm run build` (serves `client/dist/patient`) |
+| Console returns 404 but the API works | build missing, or open `/admin` on the **console** origin, not the patient one |
+| Console returns 401 in the browser | `ADMIN_BASIC_*` is set — enter those credentials first, then a staff account |
+| Console returns 403 | your IP is not in `ADMIN_ALLOWED_IPS` |
+| Staff sign-in works but every API call then 401 | `NODE_ENV=production` without HTTPS: the Secure cookie is dropped. Use HTTPS, or `NODE_ENV=development` while on plain HTTP |
+| `403` on any POST/PUT/DELETE | same-origin check — open the UI from the same host and port you are posting to |
+| `npm ci` fails after switching machines | delete `node_modules` and re-run; the lockfile is the source of truth |
+| Tests fail with a lock or "database is locked" | another app instance is using `DATA_DIR`; the suite uses its own temporary directories |
+
+---
+
+### Data and backups
+
+Everything that matters is in `DATA_DIR` (`./data` in development, `/var/lib/mednotice` in production):
+
+| Path | Contents |
+| --- | --- |
+| `mednotice.db` (+ `-wal`, `-shm`) | the whole platform: users, cases, documents metadata, audit chain |
+| `uploads/` | uploaded files, AES-256-GCM encrypted |
+| `outbox/` | simulated email/SMS/WhatsApp payloads |
+| `.master.key` | generated encryption key — **only when `MASTER_KEY` is not set** |
+
+Back up by copying the directory (stop the service first, or copy the `-wal` file too), and always store
+`MASTER_KEY` separately from the backups — without it the encrypted fields and uploads cannot be read. Generate one
+for production with:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+Reset to a clean demo database: stop the service, `rm -rf data/*`, and start again — the next boot re-seeds.
 
 If you run this project beside the global one, keep the port split: global uses 3000/4000, India uses 3001/4100.
 
