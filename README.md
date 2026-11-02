@@ -71,6 +71,10 @@ npm start            # patient app + API on :4100
 npm run start:admin  # staff console + API on 127.0.0.1:4101
 ```
 
+To deploy to a server, set the values in the block at the top of `mednotice-india/scripts/deploy.sh` (host, SSH key,
+ports, console credentials) and run `npm run deploy` from `mednotice-india/`: it pulls the branch, installs, builds
+both bundles, rewrites the systemd units and the Caddy config, restarts the services and verifies both URLs.
+
 The full walkthrough — server hardening with systemd and Caddy, the Terraform AWS EC2 deployment, an instant public
 URL with `npm run share`, the complete environment-variable reference, backups and troubleshooting — is in
 **[mednotice-india/README.md → Setup guide](mednotice-india/README.md#setup-guide--from-zero-to-running)**.

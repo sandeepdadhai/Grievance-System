@@ -236,6 +236,54 @@ Schema changes are applied automatically at start (`seed()`), and the SQLite fil
 
 ---
 
+### One-command deployment (`npm run deploy`)
+
+`scripts/deploy.sh` performs all of route B for you — and every later update too. Set the values in one block at
+the top of the file, then run it whenever you want to ship:
+
+```bash
+cd mednotice-india
+$EDITOR scripts/deploy.sh     # server address, SSH key, ports, console credentials
+npm run deploy                # or: bash scripts/deploy.sh
+```
+
+| Setting in the script | Default | Meaning |
+| --- | --- | --- |
+| `SSH_HOST` | `13.238.120.205` | server address (IP or DNS name) |
+| `SSH_USER` / `SSH_PORT` / `SSH_KEY` | `ubuntu` / `22` / `infra/terraform-key.pem` | how to log in |
+| `GIT_BRANCH` | `main` | which branch is deployed on the server |
+| `REMOTE_REPO` / `APP_SUBDIR` | `/srv/mednotice/Grievance-System` / `mednotice-india` | where the checkout lives |
+| `DATA_DIR_REMOTE` | `/var/lib/mednotice` | database, uploads, outbox on the server |
+| `PUBLIC_URL` | `http://$SSH_HOST` | public origin of the patient app (no port — Caddy listens on 80) |
+| `PATIENT_PORT` | `4102` | patient process behind Caddy |
+| `ADMIN_PORT` / `ADMIN_BIND` | `4100` / `0.0.0.0` | staff console origin; open this port in the firewall, or bind `127.0.0.1` to keep it private |
+| `ADMIN_BASIC_USER` | `ops` | HTTP Basic user for the console |
+| `ADMIN_BASIC_PASSWORD` | empty | empty keeps the existing password; set it to rotate |
+| `ADMIN_ALLOWED_IPS` | empty | comma-separated client allowlist for the console |
+| `RUN_MODE` | `development` | use `production` only with HTTPS (Secure cookies) |
+| `VERIFY` | `1` | `0` skips the post-deploy checks |
+
+Any setting can be overridden for a single run without editing the file:
+
+```bash
+SSH_HOST=203.0.113.10 ADMIN_BASIC_PASSWORD='a-new-password' ./scripts/deploy.sh
+```
+
+The script is idempotent and safe to re-run. It checks SSH, pulls `GIT_BRANCH`, runs `npm ci`, builds both bundles
+with `VITE_ADMIN_URL` pointing at the console origin, writes `/etc/mednotice.env`, installs both systemd units and
+the Caddy reverse proxy, restarts everything, waits for `/api/health`, and finally checks both URLs from your
+machine.
+
+What it does **not** overwrite: anything already in `/etc/mednotice.env` that it does not manage — `MASTER_KEY`,
+`WHATSAPP_*`, `SMS_*`, `EMAIL_*`, `OTP_*`, `AADHAAR_REQUIRED` — is copied forward on every run, and the console
+password is generated once and reused.
+
+If the console check reports `000`, the app is running but the port is firewalled. Open TCP `ADMIN_PORT` in the
+security group (AWS: **EC2 → Security Groups → the instance's group → Edit inbound rules → Custom TCP 4100**).
+Once the rule exists, no redeploy is needed — reload the URL.
+
+---
+
 ### C. Deploy to AWS EC2 automatically
 
 `infra/` contains a complete Terraform deployment: an Ubuntu 24.04 `t3.micro`, a separate 10 GB gp3 data volume,

@@ -18,6 +18,7 @@
     "start": "node dist/server/index.js",
     "start:admin": "node dist/server/admin.js",
     "share": "bash scripts/share.sh",
+    "deploy": "bash scripts/deploy.sh",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "seed": "tsx server/seed-cli.ts"
