@@ -249,7 +249,7 @@ npm run deploy                # or: bash scripts/deploy.sh
 
 | Setting in the script | Default | Meaning |
 | --- | --- | --- |
-| `SSH_HOST` | `13.238.120.205` | server address (IP or DNS name) |
+| `SSH_HOST` | `3.104.125.124` | server address — the Elastic IP, so it survives the nightly stop/start |
 | `SSH_USER` / `SSH_PORT` / `SSH_KEY` | `ubuntu` / `22` / `infra/terraform-key.pem` | how to log in |
 | `GIT_BRANCH` | `main` | which branch is deployed on the server |
 | `REMOTE_REPO` / `APP_SUBDIR` | `/srv/mednotice/Grievance-System` / `mednotice-india` | where the checkout lives |

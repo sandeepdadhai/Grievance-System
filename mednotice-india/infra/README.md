@@ -1,8 +1,8 @@
 # Deploying mednotice-india to AWS EC2
 
-Live demo (deployed from this directory): **http://13.238.120.205/** — Sydney,
-`t3.micro`, no custom domain, plain HTTP. That is still the rotating dynamic
-address; run `./elastic-ip.sh` (below) to pin it permanently.
+Live demo (deployed from this directory): **http://3.104.125.124/** — Sydney,
+`t3.micro`, no custom domain, plain HTTP. That is the Elastic IP, so it is the
+same address before and after the nightly stop/start.
 
 The MedNotice Global instance (`i-085640db7a6f9ead8`) was **terminated on
 2026-10-28**; its code stays in the repository but nothing is deployed for it.
@@ -40,8 +40,11 @@ Elastic IP below is for.
 
 ## Elastic IP (static address)
 
-The nightly stop/start hands out a new public address each morning, so the
-original plan left the URLs moving. `elastic-ip.sh` pins one address instead:
+**Assigned: `3.104.125.124`** (2026-11-02), attached to instance
+`i-09591a814f5600b70`. Before this, every nightly stop/start handed out a new
+public address and broke both URLs. `elastic-ip.sh` allocates and associates
+it, and is safe to re-run — it reuses the associated address rather than
+allocating a second one:
 
 ```bash
 set -a; . ../.env; set +a      # AWS_ACCESS_KEY_ID / SECRET / AWS_DEFAULT_REGION
@@ -103,7 +106,7 @@ set -a; . ../.env; set +a          # AWS_ACCESS_KEY_ID / SECRET / AWS_DEFAULT_RE
 export PATH="/tmp/bin:$PATH"       # terraform 1.9.8 installed under /tmp/bin
 terraform init
 terraform apply                    # key pair + instance + Elastic IP (see "what this account allows")
-./verify.sh 13.238.116.94 ../infra/terraform-key.pem
+./verify.sh 3.104.125.124 ../infra/terraform-key.pem
 ```
 
 ## What this account allows
@@ -155,7 +158,7 @@ master key, so **the data volume is the whole state** — snapshot it before any
 The instance tracks `origin/main`, so an update is three commands:
 
 ```bash
-ssh -i terraform-key.pem ubuntu@13.238.116.94 'set -e
+ssh -i terraform-key.pem ubuntu@3.104.125.124 'set -e
   cd /srv/mednotice/Grievance-System && sudo git fetch origin main && sudo git checkout -f origin/main
   cd mednotice-india && sudo npm ci --no-audit --no-fund && sudo npm run build
   sudo systemctl restart mednotice'
@@ -173,7 +176,7 @@ Runtime configuration lives in `/etc/mednotice.env` (read by the systemd unit). 
 NODE_ENV=development
 DATA_DIR=/var/lib/mednotice
 PORT=4100
-PUBLIC_URL=http://13.238.116.94
+PUBLIC_URL=http://3.104.125.124
 ```
 
 `PUBLIC_URL` is what WhatsApp messages link back to; update it when a domain is attached. The
@@ -195,7 +198,7 @@ Deployed from commit `99e3a70` ("Notify registered patients over WhatsApp when a
 
 | Check | Result |
 | --- | --- |
-| `http://13.238.116.94/api/health` | 200, `auditChain.valid: true` |
+| `http://3.104.125.124/api/health` | 200, `auditChain.valid: true` |
 | `/`, `/login`, `/admin/facility`, `/admin/dispatch`, `/admin/directory` | all 200, SPA bundle `index-WcWXxoZ1.js` |
 | sign-in `admin@mednotice.in` / `Admin!2345` | 200 + session cookie |
 | sign-in `facility.aiims@mednotice.in` / `Facility!2345` | 200, `/api/admin/facility` returns FAC-IN-001 |

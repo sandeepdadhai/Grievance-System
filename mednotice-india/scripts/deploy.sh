@@ -22,7 +22,7 @@ set -euo pipefail
 # ------------------------------- settings ---------------------------------
 
 # Where to deploy
-SSH_HOST="${SSH_HOST:-13.238.120.205}"      # public IP or DNS name of the server
+SSH_HOST="${SSH_HOST:-3.104.125.124}"       # Elastic IP of the server (survives stop/start)
 SSH_USER="${SSH_USER:-ubuntu}"
 SSH_PORT="${SSH_PORT:-22}"
 SSH_KEY="${SSH_KEY:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/infra/terraform-key.pem}"
