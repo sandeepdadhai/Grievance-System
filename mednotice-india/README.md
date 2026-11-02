@@ -128,7 +128,7 @@ PORT=4100
 ADMIN_HOST=127.0.0.1
 ADMIN_PORT=4101
 # Protect the console origin. Generate a password and set BOTH lines:
-# ADMIN_BASIC_USER=ops
+# ADMIN_BASIC_USER=admin
 # ADMIN_BASIC_PASSWORD=replace-me
 # Encrypt everything at rest with a key you keep (see "Data and backups"):
 # MASTER_KEY=
@@ -257,8 +257,8 @@ npm run deploy                # or: bash scripts/deploy.sh
 | `PUBLIC_URL` | `http://$SSH_HOST` | public origin of the patient app (no port — Caddy listens on 80) |
 | `PATIENT_PORT` | `4102` | patient process behind Caddy |
 | `ADMIN_PORT` / `ADMIN_BIND` | `4100` / `0.0.0.0` | staff console origin; open this port in the firewall, or bind `127.0.0.1` to keep it private |
-| `ADMIN_BASIC_USER` | `ops` | HTTP Basic user for the console |
-| `ADMIN_BASIC_PASSWORD` | empty | empty keeps the existing password; set it to rotate |
+| `ADMIN_BASIC_USER` | `admin` | HTTP Basic user for the console |
+| `ADMIN_BASIC_PASSWORD` | `admin@123` | HTTP Basic password; set it to `""` to keep the password already on the server |
 | `ADMIN_ALLOWED_IPS` | empty | comma-separated client allowlist for the console |
 | `RUN_MODE` | `development` | use `production` only with HTTPS (Secure cookies) |
 | `VERIFY` | `1` | `0` skips the post-deploy checks |

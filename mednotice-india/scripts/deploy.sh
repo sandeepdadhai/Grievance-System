@@ -40,8 +40,8 @@ ADMIN_PORT="${ADMIN_PORT:-4100}"               # staff console origin — open t
 ADMIN_BIND="${ADMIN_BIND:-0.0.0.0}"            # use 127.0.0.1 to keep the console private to the box
 
 # Console credentials and policy
-ADMIN_BASIC_USER="${ADMIN_BASIC_USER:-ops}"
-ADMIN_BASIC_PASSWORD="${ADMIN_BASIC_PASSWORD:-}"   # empty = keep the one on the server (generated on first run)
+ADMIN_BASIC_USER="${ADMIN_BASIC_USER:-admin}"
+ADMIN_BASIC_PASSWORD="${ADMIN_BASIC_PASSWORD:-admin@123}"   # set to "" to keep the password already on the server
 ADMIN_ALLOWED_IPS="${ADMIN_ALLOWED_IPS:-}"         # e.g. 203.0.113.4,198.51.100.7 — empty = no IP filter
 
 # Node runtime
