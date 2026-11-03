@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="Health and Family Welfare Department, Government of Assam">
+  <title>Health and Family Welfare Department, Government of Assam</title>
+  <defs>
+    <path id="sealTop" d="M25 80a55 55 0 0 1 110 0" />
+  </defs>
+  <circle cx="80" cy="80" r="79" fill="#0b2440" />
+  <circle cx="80" cy="80" r="73" fill="#ffffff" />
+  <circle cx="80" cy="80" r="70" fill="none" stroke="#f58220" stroke-width="1.4" />
+  <circle cx="80" cy="80" r="52" fill="none" stroke="#123a6b" stroke-width="1.1" />
+  <text font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="700" fill="#123a6b" letter-spacing="0.35">
+    <textPath href="#sealTop" startOffset="50%" text-anchor="middle">HEALTH &amp; FAMILY WELFARE DEPARTMENT</textPath>
+  </text>
+  <path d="M80 47l22 7v18.8c0 14.6-9.2 24.6-22 29.3-12.8-4.7-22-14.7-22-29.3V54Z" fill="#f4f8fc" stroke="#123a6b" stroke-width="1.8" />
+  <path d="M80 59v24M68 71h24" stroke="#137b3f" stroke-width="7" stroke-linecap="square" />
+  <text x="80" y="121" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="8.4" font-weight="700" fill="#137b3f" letter-spacing="0.7">GOVERNMENT OF ASSAM</text>
+  <path d="M60 128h40" stroke="#f58220" stroke-width="1.6" />
+</svg>

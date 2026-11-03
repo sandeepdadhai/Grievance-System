@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, PRIORITY_META, statusLabel } from "../api";
 import type { Jurisdiction } from "../types";
 import { Badge, Icon, PriorityBadge, VerificationBadge } from "../components/ui";
+import { useTheme } from "../theme";
 
 const MODULES = [
   {
@@ -38,6 +39,8 @@ const MODULES = [
 ];
 
 export default function Home() {
+  const { applied } = useTheme();
+  const government = applied === "assam-health";
   const [jurisdictions, setJurisdictions] = useState<Jurisdiction[]>([]);
 
   useEffect(() => {
@@ -48,20 +51,24 @@ export default function Home() {
 
   return (
     <>
-      <section className="hero">
+      <section className={`hero${government ? " gov-hero" : ""}`}>
         <div className="hero-grid">
           <div className="fade-in">
             <span className="eyebrow">
               <span className="dot" style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--accent)" }} />
-              Patient grievance infrastructure for India
+              {government ? "Health & Family Welfare Department · Government of Assam" : "Patient grievance infrastructure for India"}
             </span>
             <h1>
-              Patient complaints, <span>verified</span> and routed to the right authority.
+              {government ? (
+                <>Patient grievances, <span>reviewed</span> by the Health &amp; Family Welfare Department.</>
+              ) : (
+                <>Patient complaints, <span>verified</span> and routed to the right authority.</>
+              )}
             </h1>
             <p className="hero-lead">
-              MedNotice India ingests grievances and treatment records from patients across the country, screens documents for
-              tampering, triages clinical urgency against Indian regulation, and delivers a complete case file to MoHFW, the
-              National Health Authority or the relevant State Health Department.
+              {government
+                ? "File a grievance about treatment received at a government or empanelled health facility in Assam, attach your records, and follow the case until the department closes it. Every submission is acknowledged, routed to the facility named in the complaint and recorded in an audit trail."
+                : "MedNotice India ingests grievances and treatment records from patients across the country, screens documents for tampering, triages clinical urgency against Indian regulation, and delivers a complete case file to MoHFW, the National Health Authority or the relevant State Health Department."}
             </p>
             <div className="hero-actions">
               <Link to="/submit" className="btn primary">
@@ -76,6 +83,8 @@ export default function Home() {
               <div className="hero-stat"><strong>DPDP</strong><span>Act 2023 aligned</span></div>
             </div>
           </div>
+
+          {government && <NoticeBoard />}
 
           <div className="console-card fade-in" aria-label="Example verification console">
             <div className="console-head">
@@ -129,8 +138,17 @@ export default function Home() {
 
       <section className="section">
         <div className="section-head">
-          <h2>One national platform, state-level routing, four protocols</h2>
-          <p>Every Indian state and Union Territory is a configuration entry. Adding a health department means adding a schema mapping — not rewriting the case engine.</p>
+          {government ? (
+            <>
+              <h2>How a grievance moves through the department</h2>
+              <p>Submit the complaint, attach the hospital records, and the department's grievance cell verifies the documents, weighs clinical urgency and forwards the case to the facility that must respond.</p>
+            </>
+          ) : (
+            <>
+              <h2>One national platform, state-level routing, four protocols</h2>
+              <p>Every Indian state and Union Territory is a configuration entry. Adding a health department means adding a schema mapping — not rewriting the case engine.</p>
+            </>
+          )}
         </div>
         <div className="grid-3">
           {MODULES.map((m) => (
@@ -151,6 +169,29 @@ export default function Home() {
           ))}
         </div>
       </section>
+
+      {government && (
+        <section className="gov-archive">
+          <div className="gov-wrap">
+            <div>
+              <h2>From the department&apos;s records</h2>
+              <p>
+                The Health &amp; Family Welfare Department runs medical colleges, district hospitals, primary health centres and
+                sub-centres across Assam. A grievance filed here is routed to the facility named in the complaint and reviewed by
+                the department&apos;s grievance cell, with the outcome recorded against the case file.
+              </p>
+              <p className="small" style={{ marginTop: 10, color: "#55606d" }}>
+                Photographs are illustrative: Assam Medical College &amp; Hospital, Dibrugarh (CC BY-SA 4.0), and an archival view
+                of the Medical College Hospital (public domain).
+              </p>
+            </div>
+            <figure>
+              <img src="/assam/archive-hospital.jpg" alt="Archival photograph of a medical college hospital building" loading="lazy" />
+              <figcaption>Medical College Hospital — archival photograph, public domain.</figcaption>
+            </figure>
+          </div>
+        </section>
+      )}
 
       <section className="section" style={{ paddingTop: 10 }}>
         <div className="grid-2">
@@ -210,5 +251,35 @@ export default function Home() {
         </div>
       </section>
     </>
+  );
+}
+
+/** Notice board shown in the Assam Health Department presentation of the portal. */
+const NOTICES = [
+  { iso: "2026-10-28", date: "28 Oct 2026", title: "Patient grievance portal opened for all districts of Assam", tag: "New" },
+  { iso: "2026-10-21", date: "21 Oct 2026", title: "Attach discharge summaries, bills and prescriptions as PDF, JPG or PNG", tag: "Guidance" },
+  { iso: "2026-10-14", date: "14 Oct 2026", title: "Track a case with your case ID and registered mobile number", tag: "How to" },
+  { iso: "2026-10-07", date: "07 Oct 2026", title: "Every grievance is acknowledged within 48 working hours", tag: "Service standard" },
+];
+
+function NoticeBoard() {
+  return (
+    <aside className="gov-notices fade-in" aria-label="Notices and updates">
+      <div className="gov-notices-head">
+        <span>Notices &amp; updates</span>
+        <em>Health Dept.</em>
+      </div>
+      <ul>
+        {NOTICES.map((notice) => (
+          <li key={notice.iso}>
+            <time dateTime={notice.iso}>{notice.date}</time>
+            <div>
+              <p>{notice.title}</p>
+              <span className="gov-tag">{notice.tag}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </aside>
   );
 }

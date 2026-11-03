@@ -896,6 +896,19 @@ portal palette applies to visitors on their next page load.
 | `national-health` | Government | Central programme reviews: white panels, navy masthead, saffron highlights |
 | `enterprise` | Enterprise | Private hospital groups and health-tech partners: white cards, indigo accents, soft elevation |
 
+`assam-health` is not a recolour of the default shell. For the patient portal it renders the structure Assam health
+portals use: a dark utility strip (`Government of Assam`, skip link, sign-in), a white masthead with the departmental
+crest and helpline, a navy navigation bar with a saffron active marker, a photographic banner, a notices-and-updates
+board and a navy footer with helplines and department address. That markup lives in `GovernmentHeader`,
+`GovernmentFooter` (`client/src/components/Layout.tsx`) and `NoticeBoard` (`client/src/pages/Home.tsx`), styled by the
+`.gov-*` rules in `client/src/styles.css`. The staff console keeps its sidebar, restyled navy with a government strip
+above the top bar.
+
+**Assets.** `client/public/assam/`: `emblem.svg` is a crest drawn for this project (not the official state seal);
+`hero-hospital.jpg` is a photograph of Assam Medical College & Hospital by Pranabnlp, Wikimedia Commons, CC BY-SA 4.0;
+`archive-hospital.jpg` is a public-domain archival view of the Medical College Hospital. Both credits also appear in
+the portal footer.
+
 **How it is stored.** One row in the `settings` table (`key = 'theme'`, value `{"patient":"…","admin":"…"}`).
 Both processes share the SQLite file, so a palette choice survives restarts, deploys and the nightly stop/start,
 and the patient portal and staff console can never drift apart.

@@ -1,6 +1,7 @@
 import { Link, NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
 import { hasPermission, roleLabel } from "../api";
 import { useAuth } from "../auth";
+import { useTheme } from "../theme";
 import { ChatWidget } from "./ChatWidget";
 import { Icon } from "./ui";
 
@@ -25,6 +26,19 @@ function Brand() {
 
 export function PublicLayout() {
   const { user } = useAuth();
+  const { applied } = useTheme();
+  if (applied === "assam-health") {
+    return (
+      <div style={{ minHeight: "100%" }}>
+        <GovernmentHeader />
+        <main id="main">
+          <Outlet />
+        </main>
+        <GovernmentFooter />
+        <ChatWidget />
+      </div>
+    );
+  }
   return (
     <div style={{ minHeight: "100%" }}>
       <header className="site-header">
@@ -87,6 +101,122 @@ function LogoutButton() {
   );
 }
 
+/**
+ * Assam Health Department presentation for the patient portal: the utility
+ * strip, departmental masthead and blue navigation bar that state portals use
+ * instead of a single marketing header. Only rendered for that preset.
+ */
+function GovernmentHeader() {
+  const { user } = useAuth();
+  return (
+    <header className="gov-header">
+      <div className="gov-utility">
+        <div className="gov-wrap">
+          <span className="gov-utility-left">
+            <span className="gov-dot" aria-hidden="true" />
+            Government of Assam
+          </span>
+          <nav className="gov-utility-right" aria-label="Utility">
+            <a href="#main">Skip to main content</a>
+            <span aria-hidden="true">|</span>
+            <Link to="/track">Track a case</Link>
+            <span aria-hidden="true">|</span>
+            {user ? (
+              <Link to={user.baseRole === "PATIENT" ? "/portal" : STAFF_CONSOLE_URL}>My workspace</Link>
+            ) : (
+              <Link to="/login">Sign in</Link>
+            )}
+          </nav>
+        </div>
+      </div>
+
+      <div className="gov-masthead">
+        <div className="gov-wrap">
+          <Link to="/" className="gov-brand">
+            <img src="/assam/emblem.svg" alt="Health and Family Welfare Department, Government of Assam" width={64} height={64} />
+            <span className="gov-brand-text">
+              <span className="gov-brand-dept">Health &amp; Family Welfare Department</span>
+              <span className="gov-brand-state">Government of Assam</span>
+              <span className="gov-brand-tag">Patient Grievance Redressal Portal</span>
+            </span>
+          </Link>
+          <div className="gov-masthead-side">
+            <div className="gov-helpline">
+              <span className="gov-helpline-label">Health Helpline</span>
+              <strong>104</strong>
+            </div>
+            <div className="gov-masthead-actions">
+              {user ? (
+                <>
+                  <Link to={user.baseRole === "PATIENT" ? "/portal" : STAFF_CONSOLE_URL} className="btn sm">My workspace</Link>
+                  <LogoutButton />
+                </>
+              ) : (
+                <>
+                  <Link to="/submit" className="btn sm primary">File a grievance</Link>
+                  <Link to="/login" className="btn sm ghost">Sign in</Link>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <nav className="gov-nav" aria-label="Primary">
+        <div className="gov-wrap">
+          <NavLink to="/" end>Home</NavLink>
+          <NavLink to="/submit">File a grievance</NavLink>
+          <NavLink to="/track">Track a case</NavLink>
+          <NavLink to="/community">Community</NavLink>
+          <NavLink to="/signup">Patient sign up</NavLink>
+        </div>
+      </nav>
+    </header>
+  );
+}
+
+function GovernmentFooter() {
+  return (
+    <footer className="gov-footer">
+      <div className="gov-wrap gov-footer-grid">
+        <div>
+          <strong>Health &amp; Family Welfare Department</strong>
+          <p>
+            Government of Assam
+            <br />
+            Directorate of Health Services (FW)
+            <br />
+            Hengrabari, Guwahati – 781036, Assam
+          </p>
+        </div>
+        <div>
+          <strong>Quick links</strong>
+          <Link to="/submit">File a grievance</Link>
+          <Link to="/track">Track a case</Link>
+          <Link to="/community">Patient community</Link>
+          <Link to="/login">Sign in</Link>
+        </div>
+        <div>
+          <strong>Helplines</strong>
+          <p>
+            Health Helpline: 104
+            <br />
+            Ambulance: 108
+            <br />
+            Emergency: 112
+          </p>
+        </div>
+      </div>
+      <div className="gov-wrap gov-footer-bottom">
+        <span>© {new Date().getFullYear()} Health &amp; Family Welfare Department, Government of Assam · Demonstration deployment with synthetic data.</span>
+        <span className="gov-credit">
+          Photographs: Assam Medical College &amp; Hospital by Pranabnlp (CC BY-SA 4.0); archival view, public domain.
+        </span>
+      </div>
+    </footer>
+  );
+}
+
 const NAV = [
   { to: "/admin", label: "Overview", icon: "grid" as const, end: true, group: "Operations" as const },
   { to: "/admin/cases", label: "Cases", icon: "folder" as const, group: "Operations" as const },
@@ -106,6 +236,7 @@ const NAV = [
 export function AdminLayout() {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const { applied } = useTheme();
   if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname)}`} replace />;
   if (user.baseRole === "PATIENT") return <Navigate to="/login" replace />;
 
@@ -166,6 +297,11 @@ export function AdminLayout() {
         </div>
       </aside>
       <div className="main">
+        {applied === "assam-health" && (
+          <div className="gov-admin-strip">
+            Government of Assam · Health &amp; Family Welfare Department
+          </div>
+        )}
         <div className="topbar">
           <div className="topbar-title">
             <span className="dot" />
