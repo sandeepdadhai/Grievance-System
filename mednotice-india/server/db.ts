@@ -255,6 +255,13 @@ CREATE TABLE IF NOT EXISTS webhook_events (
   payload_json TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  updated_by TEXT
+);
+
 CREATE TABLE IF NOT EXISTS community_posts (
   id TEXT PRIMARY KEY,
   author_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,

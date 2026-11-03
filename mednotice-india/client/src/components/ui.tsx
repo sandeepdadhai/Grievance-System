@@ -114,7 +114,7 @@ export function Modal({ title, sub, onClose, children }: { title: string; sub?: 
   );
 }
 
-type IconName = "grid" | "folder" | "users" | "shield" | "plug" | "send" | "activity" | "logout" | "arrow" | "upload" | "check" | "x" | "alert" | "search" | "chevron" | "lock" | "file" | "plus" | "refresh" | "clipboard" | "globe" | "message" | "building" | "truck" | "mail";
+type IconName = "grid" | "folder" | "users" | "shield" | "plug" | "send" | "activity" | "logout" | "arrow" | "upload" | "check" | "x" | "alert" | "search" | "chevron" | "lock" | "file" | "plus" | "refresh" | "clipboard" | "globe" | "message" | "building" | "truck" | "mail" | "palette";
 
 export function Icon({ name, size = 17 }: { name: IconName; size?: number }) {
   const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -187,6 +187,13 @@ export function Icon({ name, size = 17 }: { name: IconName; size?: number }) {
         <svg {...common}>
           <rect x="3" y="5" width="18" height="14" rx="2" />
           <path d="m3.5 7 8.5 6 8.5-6" />
+        </svg>
+      );
+    case "palette":
+      return (
+        <svg {...common}>
+          <path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.9-.9 1.9-1.9 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4.3-4-7.9-9-7.9Z" />
+          <path d="M7.5 11.5h.01M9.8 7.8h.01M14.2 7.4h.01M17 10.4h.01" />
         </svg>
       );
     default:

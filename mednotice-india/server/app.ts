@@ -17,6 +17,7 @@ import { dispatchRouter } from "./routes/dispatch.js";
 import { communicationsRouter } from "./routes/communications.js";
 import { chatRouter } from "./routes/chat.js";
 import { sinkRouter } from "./routes/sink.js";
+import { publicThemeRouter, themeAdminRouter } from "./routes/theme.js";
 
 export type AppOptions = {
   /**
@@ -77,12 +78,14 @@ export function createApp(options: AppOptions = {}): express.Express {
     });
   });
 
+  app.use("/api/public/theme", publicThemeRouter);
   app.use("/api/public", publicRouter);
   app.use("/api/auth", authRouter);
   app.use("/api/cases", casesRouter);
   app.use("/api/documents", documentsRouter);
   app.use("/api/chat", chatRouter);
   app.use("/api/community", communityRouter);
+  app.use("/api/admin/theme", themeAdminRouter);
   app.use("/api/admin/roles", rolesRouter);
   app.use("/api/admin/community", communityAdminRouter);
   app.use("/api/admin/directory", directoryRouter);

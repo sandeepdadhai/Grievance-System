@@ -878,6 +878,44 @@ process, KMS-backed keys and legal review under Indian law.
 
 ---
 
+## Interface themes (Assam Health Department, enterprise)
+
+The look of both front ends is a **runtime setting**, not a build flag: every palette ships inside the shared
+stylesheet and the database records which one each surface uses. A super administrator can switch palettes at any
+time without a rebuild, a redeploy or an environment variable.
+
+**Where:** staff console → **Governance → Appearance** (`/admin/theme`), visible to `SUPER_ADMIN` accounts only.
+The page offers two independent choices — the patient portal and the staff console — with **Save appearance**,
+**Reset to default** and **Discard**. Picking a staff-console palette previews it in the current window; a patient
+portal palette applies to visitors on their next page load.
+
+| Preset | Family | Intended for |
+| --- | --- | --- |
+| `midnight` *(default)* | Dark | 24×7 monitoring desks — the original dark console |
+| `assam-health` | Government | Assam Health Department demonstration: white and parchment surfaces, deep green masthead, serif headings, squared-off corners and the tricolour rule |
+| `national-health` | Government | Central programme reviews: white panels, navy masthead, saffron highlights |
+| `enterprise` | Enterprise | Private hospital groups and health-tech partners: white cards, indigo accents, soft elevation |
+
+**How it is stored.** One row in the `settings` table (`key = 'theme'`, value `{"patient":"…","admin":"…"}`).
+Both processes share the SQLite file, so a palette choice survives restarts, deploys and the nightly stop/start,
+and the patient portal and staff console can never drift apart.
+
+**API.**
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET` | `/api/public/theme` | Public — `{ theme: { patient, admin, defaultTheme, presets[], updatedAt, updatedBy } }`; needed before sign-in so the portal can paint itself |
+| `PATCH` | `/api/admin/theme` | `SUPER_ADMIN` only — body `{ "patient"?: id, "admin"?: id }` |
+
+Unknown preset ids are rejected with `400`. Every accepted change appends a `THEME_UPDATED` entry — previous and
+new palette, actor, IP and user agent — to the audit chain, so a repaint is as traceable as a case decision.
+
+**Adding a palette.** Add a `:root[data-theme="my-theme"] { … }` block using the tokens from the presets in
+`client/src/styles.css`, then add the matching entry to `THEME_PRESETS` in `server/theme.ts` (id, name, family,
+description, swatches). Both bundles pick it up on the next build.
+
+---
+
 ## Managing the directory
 
 The catalogue in `server/config.ts` seeds the `authorities` table on first boot. After that the database is the

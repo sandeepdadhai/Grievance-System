@@ -10,6 +10,7 @@ import AdminOverview from "./pages/admin/Overview";
 import AdminCases from "./pages/admin/Cases";
 import AdminFacility from "./pages/admin/Facility";
 import AdminUsers from "./pages/admin/Users";
+import AdminTheme from "./pages/admin/Theme";
 import AdminAudit from "./pages/admin/Audit";
 import AdminAdapters from "./pages/admin/Adapters";
 import AdminCompliance from "./pages/admin/Compliance";
@@ -52,6 +53,14 @@ export default function AdminApp() {
           element={
             <StaffOnly roles={["SUPER_ADMIN"]}>
               <AdminUsers />
+            </StaffOnly>
+          }
+        />
+        <Route
+          path="theme"
+          element={
+            <StaffOnly roles={["SUPER_ADMIN"]}>
+              <AdminTheme />
             </StaffOnly>
           }
         />
