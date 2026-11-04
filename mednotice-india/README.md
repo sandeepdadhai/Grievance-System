@@ -904,10 +904,11 @@ board and a navy footer with helplines and department address. That markup lives
 `.gov-*` rules in `client/src/styles.css`. The staff console keeps its sidebar, restyled navy with a government strip
 above the top bar.
 
-**Assets.** `client/public/assam/`: `emblem.svg` is a crest drawn for this project (not the official state seal);
-`hero-hospital.jpg` is a photograph of Assam Medical College & Hospital by Pranabnlp, Wikimedia Commons, CC BY-SA 4.0;
-`archive-hospital.jpg` is a public-domain archival view of the Medical College Hospital. Both credits also appear in
-the portal footer.
+**Assets.** `client/public/assam/`: `emblem.svg` is a crest drawn for this project (not the official state seal) and
+`favicon.svg` is its small version, used as the tab icon for both the patient and console bundles. `hero-hospital.jpg`
+is a photograph of Assam Medical College & Hospital by Pranabnlp, Wikimedia Commons, CC BY-SA 4.0. `leaders.jpg` shows
+Prime Minister Narendra Modi and Chief Minister Himanta Biswa Sarma at the swearing-in ceremony of the Government of
+Assam, from the Prime Minister's Office via Wikimedia Commons, GODL-India. Credits also appear in the portal footer.
 
 **How it is stored.** One row in the `settings` table (`key = 'theme'`, value `{"patient":"…","admin":"…"}`).
 Both processes share the SQLite file, so a palette choice survives restarts, deploys and the nightly stop/start,

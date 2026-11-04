@@ -882,8 +882,8 @@ pre.payload { background: var(--code-bg); border: 1px solid var(--line); border-
 :root[data-theme="assam-health"] h2,
 :root[data-theme="assam-health"] h3,
 :root[data-theme="assam-health"] h4 { color: #123a6b; }
-:root[data-theme="assam-health"] a { color: #1355a3; text-decoration: underline; text-underline-offset: 2px; }
-:root[data-theme="assam-health"] a:hover { color: #0f4788; }
+:root[data-theme="assam-health"] main a:not(.btn):not(.nav-link) { color: #1355a3; text-decoration: underline; text-underline-offset: 2px; }
+:root[data-theme="assam-health"] main a:not(.btn):not(.nav-link):hover { color: #0f4788; }
 :root[data-theme="assam-health"] a.btn,
 :root[data-theme="assam-health"] a.nav-link,
 :root[data-theme="assam-health"] a.brand,
@@ -896,12 +896,11 @@ pre.payload { background: var(--code-bg); border: 1px solid var(--line); border-
 :root[data-theme="assam-health"] .badge,
 :root[data-theme="assam-health"] .chip { border-radius: 2px; }
 :root[data-theme="assam-health"] .btn { border-radius: 2px; }
-:root[data-theme="assam-health"] .section-head h2 {
-  border-left: 5px solid #137b3f;
-  padding-left: 12px;
-  font-size: 1.32rem;
-  line-height: 1.35;
+:root[data-theme="assam-health"] .section-head {
+  border-top: 3px solid #137b3f;
+  padding-top: 12px;
 }
+:root[data-theme="assam-health"] .section-head h2 { font-size: 1.32rem; line-height: 1.35; }
 :root[data-theme="assam-health"] .section-head p { color: #4b5866; }
 :root[data-theme="assam-health"] .console-card { display: none; }
 
@@ -921,6 +920,11 @@ pre.payload { background: var(--code-bg); border: 1px solid var(--line); border-
 :root[data-theme="assam-health"] .sidebar .btn.ghost:hover { color: #ffffff; background: rgba(255, 255, 255, 0.1); }
 :root[data-theme="assam-health"] .topbar { border-bottom: 1px solid #d4dae3; }
 
+/* Crest used in the staff console sidebar in place of the MN monogram. */
+.brand-emblem { width: 34px; height: 34px; display: block; flex-shrink: 0; }
+:root[data-theme="assam-health"] .sidebar .brand-name { font-size: 13px; line-height: 1.25; letter-spacing: 0; }
+:root[data-theme="assam-health"] .sidebar .brand-sub { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+
 .gov-admin-strip {
   background: #0b2440;
   color: #dbe5f1;
@@ -939,8 +943,8 @@ pre.payload { background: var(--code-bg); border: 1px solid var(--line); border-
 .gov-utility-left { display: inline-flex; align-items: center; gap: 8px; letter-spacing: 0.06em; text-transform: uppercase; font-size: 10.5px; }
 .gov-dot { width: 8px; height: 8px; border-radius: 50%; background: #f58220; display: inline-block; }
 .gov-utility-right { display: flex; align-items: center; gap: 10px; color: #8fa6c4; }
-.gov-utility-right a { color: #cfdcec; }
-.gov-utility-right a:hover { color: #ffffff; text-decoration: underline; }
+:root[data-theme="assam-health"] .gov-utility-right a { color: #cfdcec; text-decoration: none; }
+:root[data-theme="assam-health"] .gov-utility-right a:hover { color: #ffffff; text-decoration: underline; }
 
 .gov-masthead { background: #ffffff; border-bottom: 1px solid #d4dae3; }
 .gov-masthead .gov-wrap { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-top: 14px; padding-bottom: 14px; flex-wrap: wrap; }
@@ -959,13 +963,14 @@ pre.payload { background: var(--code-bg); border: 1px solid var(--line); border-
 
 .gov-nav { background: #123a6b; border-top: 3px solid #f58220; }
 .gov-nav .gov-wrap { display: flex; flex-wrap: wrap; gap: 0; }
-.gov-nav a {
+:root[data-theme="assam-health"] .gov-nav a {
   color: #eaf0f8; font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
   padding: 12px 16px; border-bottom: 3px solid transparent; border-left: 1px solid rgba(255, 255, 255, 0.09);
+  text-decoration: none;
 }
-.gov-nav a:first-child { border-left: none; }
-.gov-nav a:hover { background: #0f2f56; color: #ffffff; text-decoration: none; }
-.gov-nav a.active { background: #0b2440; border-bottom-color: #f58220; color: #ffffff; }
+:root[data-theme="assam-health"] .gov-nav a:first-child { border-left: none; }
+:root[data-theme="assam-health"] .gov-nav a:hover { background: #0f2f56; color: #ffffff; text-decoration: none; }
+:root[data-theme="assam-health"] .gov-nav a.active { background: #0b2440; border-bottom-color: #f58220; color: #ffffff; }
 
 /* ---------------------------------- banner ------------------------------- */
 
@@ -1020,13 +1025,13 @@ pre.payload { background: var(--code-bg); border: 1px solid var(--line); border-
 
 /* -------------------------------- photo band ----------------------------- */
 
-.gov-archive { background: #ffffff; border-top: 1px solid #d4dae3; border-bottom: 1px solid #d4dae3; margin-top: 10px; }
-.gov-archive .gov-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 32px; align-items: center; padding-top: 26px; padding-bottom: 26px; }
-.gov-archive h2 { font-size: 1.2rem; border-left: 5px solid #137b3f; padding-left: 12px; }
-.gov-archive p { color: #4b5866; font-size: 13px; margin-top: 8px; max-width: 560px; }
-.gov-archive figure { margin: 0; }
-.gov-archive img { width: 100%; display: block; border: 1px solid #cfd6e0; padding: 6px; background: #ffffff; }
-.gov-archive figcaption { font-size: 11px; color: #55606d; margin-top: 6px; }
+.gov-leaders { background: #ffffff; border-top: 1px solid #d4dae3; border-bottom: 4px solid #f58220; }
+.gov-leaders .gov-wrap { padding-top: 26px; padding-bottom: 26px; }
+.gov-leaders h2 { font-size: 1.2rem; border-left: 5px solid #137b3f; padding-left: 12px; }
+.gov-leaders p { color: #4b5866; font-size: 13px; margin-top: 8px; max-width: 760px; }
+.gov-leaders figure { margin: 16px 0 0; }
+.gov-leaders img { width: 100%; max-width: 1100px; display: block; border: 1px solid #cfd6e0; padding: 6px; background: #ffffff; }
+.gov-leaders figcaption { font-size: 11px; color: #55606d; margin-top: 6px; }
 
 /* ---------------------------------- footer ------------------------------- */
 
@@ -1036,8 +1041,8 @@ pre.payload { background: var(--code-bg); border: 1px solid var(--line); border-
   text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px;
 }
 .gov-footer p { color: #c8d6e6; line-height: 1.75; }
-.gov-footer a { display: block; color: #dbe7f5; padding: 2px 0; }
-.gov-footer a:hover { color: #ffffff; text-decoration: underline; }
+:root[data-theme="assam-health"] .gov-footer a { display: block; color: #dbe7f5; padding: 2px 0; text-decoration: none; }
+:root[data-theme="assam-health"] .gov-footer a:hover { color: #ffffff; text-decoration: underline; }
 .gov-footer-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 30px; padding-top: 30px; padding-bottom: 22px; }
 .gov-footer-bottom {
   display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
@@ -1048,7 +1053,6 @@ pre.payload { background: var(--code-bg); border: 1px solid var(--line); border-
 
 @media (max-width: 980px) {
   :root[data-theme="assam-health"] .gov-hero .hero-grid { grid-template-columns: 1fr; padding: 32px 20px; }
-  .gov-archive .gov-wrap { grid-template-columns: 1fr; }
   .gov-footer-grid { grid-template-columns: 1fr 1fr; }
   .gov-masthead .gov-wrap { gap: 14px; }
 }

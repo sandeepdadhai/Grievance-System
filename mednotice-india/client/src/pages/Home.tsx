@@ -170,29 +170,6 @@ export default function Home() {
         </div>
       </section>
 
-      {government && (
-        <section className="gov-archive">
-          <div className="gov-wrap">
-            <div>
-              <h2>From the department&apos;s records</h2>
-              <p>
-                The Health &amp; Family Welfare Department runs medical colleges, district hospitals, primary health centres and
-                sub-centres across Assam. A grievance filed here is routed to the facility named in the complaint and reviewed by
-                the department&apos;s grievance cell, with the outcome recorded against the case file.
-              </p>
-              <p className="small" style={{ marginTop: 10, color: "#55606d" }}>
-                Photographs are illustrative: Assam Medical College &amp; Hospital, Dibrugarh (CC BY-SA 4.0), and an archival view
-                of the Medical College Hospital (public domain).
-              </p>
-            </div>
-            <figure>
-              <img src="/assam/archive-hospital.jpg" alt="Archival photograph of a medical college hospital building" loading="lazy" />
-              <figcaption>Medical College Hospital — archival photograph, public domain.</figcaption>
-            </figure>
-          </div>
-        </section>
-      )}
-
       <section className="section" style={{ paddingTop: 10 }}>
         <div className="grid-2">
           <div className="card">
@@ -250,6 +227,30 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {government && (
+        <section className="gov-leaders">
+          <div className="gov-wrap">
+            <h2>Health services for every village of Assam</h2>
+            <p>
+              Grievance redressal sits inside the department&apos;s wider effort to take health services to every district, block
+              and village of Assam, so a patient&apos;s complaint reaches the facility and the department without a journey to
+              Guwahati.
+            </p>
+            <figure>
+              <img
+                src="/assam/leaders.jpg"
+                alt="Prime Minister Narendra Modi and Chief Minister Himanta Biswa Sarma at the swearing-in ceremony of the Government of Assam in Guwahati"
+                loading="lazy"
+              />
+              <figcaption>
+                Prime Minister Narendra Modi with Chief Minister Himanta Biswa Sarma at the swearing-in ceremony of the Government
+                of Assam, Guwahati. Photograph: Prime Minister&apos;s Office, GODL-India (Wikimedia Commons).
+              </figcaption>
+            </figure>
+          </div>
+        </section>
+      )}
     </>
   );
 }

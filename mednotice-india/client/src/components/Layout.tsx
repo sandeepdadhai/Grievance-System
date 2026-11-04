@@ -12,7 +12,24 @@ import { Icon } from "./ui";
  */
 export const STAFF_CONSOLE_URL = ((import.meta.env.VITE_ADMIN_URL as string | undefined) ?? "http://localhost:4101").replace(/\/+$/, "");
 
-function Brand() {
+/**
+ * Wordmark for both surfaces. The Assam Health Department preset swaps the
+ * MedNotice lockup for the departmental crest, so the console sidebar and the
+ * sign-in screen carry the same identity as the patient masthead.
+ */
+export function Brand() {
+  const { applied } = useTheme();
+  if (applied === "assam-health") {
+    return (
+      <Link to="/" className="brand">
+        <img className="brand-emblem" src="/assam/emblem.svg" alt="Health and Family Welfare Department, Government of Assam" />
+        <span>
+          <span className="brand-name" style={{ display: "block" }}>Health &amp; Family Welfare</span>
+          <span className="brand-sub" style={{ display: "block" }}>Government of Assam</span>
+        </span>
+      </Link>
+    );
+  }
   return (
     <Link to="/" className="brand">
       <span className="brand-mark">MN</span>
@@ -210,7 +227,7 @@ function GovernmentFooter() {
       <div className="gov-wrap gov-footer-bottom">
         <span>© {new Date().getFullYear()} Health &amp; Family Welfare Department, Government of Assam · Demonstration deployment with synthetic data.</span>
         <span className="gov-credit">
-          Photographs: Assam Medical College &amp; Hospital by Pranabnlp (CC BY-SA 4.0); archival view, public domain.
+          Photographs: Assam Medical College &amp; Hospital by Pranabnlp (CC BY-SA 4.0); Prime Minister&apos;s Office (GODL-India).
         </span>
       </div>
     </footer>

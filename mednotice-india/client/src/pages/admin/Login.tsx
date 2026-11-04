@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth";
 import { Alert, Icon } from "../../components/ui";
+import { Brand } from "../../components/Layout";
 
 const DEMOS = [
   { email: "admin@mednotice.in", password: "Admin!2345", label: "Super Administrator", org: "MedNotice India" },
@@ -66,13 +67,7 @@ export default function AdminLogin() {
   return (
     <div className="auth-shell">
       <aside className="auth-aside">
-        <div className="brand" style={{ padding: 0 }}>
-          <span className="brand-mark">MN</span>
-          <span>
-            <span className="brand-name">MedNotice</span>
-            <span className="brand-sub" style={{ display: "block" }}>India</span>
-          </span>
-        </div>
+        <Brand />
         <div style={{ maxWidth: 430 }}>
           <h1 style={{ fontSize: "2rem", marginBottom: 12 }}>Staff console.</h1>
           <p className="muted" style={{ fontSize: 13.5 }}>

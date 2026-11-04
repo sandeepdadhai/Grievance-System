@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Health and Family Welfare Department, Government of Assam">
+  <circle cx="32" cy="32" r="32" fill="#0b2440" />
+  <circle cx="32" cy="32" r="27" fill="#ffffff" />
+  <circle cx="32" cy="32" r="23" fill="none" stroke="#123a6b" stroke-width="1.5" />
+  <path d="M32 15l12 4v11.5c0 8.2-5.2 13.9-12 16.3-6.8-2.4-12-8.1-12-16.3V19Z" fill="#f4f8fc" stroke="#123a6b" stroke-width="1.8" />
+  <path d="M32 24v14M25 31h14" stroke="#137b3f" stroke-width="4.6" stroke-linecap="square" />
+  <path d="M22 52h20" stroke="#f58220" stroke-width="2" />
+</svg>
