@@ -906,9 +906,8 @@ above the top bar.
 
 **Assets.** `client/public/assam/`: `emblem.svg` is a crest drawn for this project (not the official state seal) and
 `favicon.svg` is its small version, used as the tab icon for both the patient and console bundles. `hero-hospital.jpg`
-is a photograph of Assam Medical College & Hospital by Pranabnlp, Wikimedia Commons, CC BY-SA 4.0, and `crowd.jpg` is a
-village gathering by Sumita Roy Dutta, Wikimedia Commons, CC BY-SA 4.0, shown between the process steps and the
-privacy cards on the patient home page. Credits also appear in the portal footer.
+is a photograph of Assam Medical College & Hospital by Pranabnlp, Wikimedia Commons, CC BY-SA 4.0, used behind the
+patient hero banner. The credit also appears in the portal footer.
 
 **How it is stored.** One row in the `settings` table (`key = 'theme'`, value `{"patient":"…","admin":"…"}`).
 Both processes share the SQLite file, so a palette choice survives restarts, deploys and the nightly stop/start,

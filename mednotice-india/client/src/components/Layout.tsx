@@ -227,7 +227,7 @@ function GovernmentFooter() {
       <div className="gov-wrap gov-footer-bottom">
         <span>© {new Date().getFullYear()} Health &amp; Family Welfare Department, Government of Assam · Demonstration deployment with synthetic data.</span>
         <span className="gov-credit">
-          Photographs: Assam Medical College &amp; Hospital by Pranabnlp (CC BY-SA 4.0); village gathering by Sumita Roy Dutta (CC BY-SA 4.0).
+          Photograph: Assam Medical College &amp; Hospital by Pranabnlp (CC BY-SA 4.0).
         </span>
       </div>
     </footer>

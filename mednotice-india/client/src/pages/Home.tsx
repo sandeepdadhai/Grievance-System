@@ -170,19 +170,6 @@ export default function Home() {
         </div>
       </section>
 
-      {government && (
-        <section className="gov-crowd">
-          <div className="gov-wrap">
-            <figure>
-              <img src="/assam/crowd.jpg" alt="Villagers from rural India gathered together in a crowd" loading="lazy" />
-              <figcaption>
-                A village gathering in India. Photograph: Sumita Roy Dutta, Wikimedia Commons, CC BY-SA 4.0.
-              </figcaption>
-            </figure>
-          </div>
-        </section>
-      )}
-
       <section className="section" style={{ paddingTop: 10 }}>
         <div className="grid-2">
           <div className="card">
