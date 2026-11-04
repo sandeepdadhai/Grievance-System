@@ -69,7 +69,7 @@ export function PublicLayout() {
         <div className="row" style={{ gap: 8 }}>
           {user ? (
             <>
-              <Link to={user.baseRole === "PATIENT" ? "/portal" : STAFF_CONSOLE_URL} className="btn sm ghost">My workspace</Link>
+              <Link to={user.baseRole === "PATIENT" ? "/portal" : STAFF_CONSOLE_URL} className="btn sm ghost">My home</Link>
               <LogoutButton />
             </>
           ) : (
@@ -139,7 +139,7 @@ function GovernmentHeader() {
             <Link to="/track">Track a case</Link>
             <span aria-hidden="true">|</span>
             {user ? (
-              <Link to={user.baseRole === "PATIENT" ? "/portal" : STAFF_CONSOLE_URL}>My workspace</Link>
+              <Link to={user.baseRole === "PATIENT" ? "/portal" : STAFF_CONSOLE_URL}>My home</Link>
             ) : (
               <Link to="/login">Sign in</Link>
             )}
@@ -165,7 +165,7 @@ function GovernmentHeader() {
             <div className="gov-masthead-actions">
               {user ? (
                 <>
-                  <Link to={user.baseRole === "PATIENT" ? "/portal" : STAFF_CONSOLE_URL} className="btn sm">My workspace</Link>
+                  <Link to={user.baseRole === "PATIENT" ? "/portal" : STAFF_CONSOLE_URL} className="btn sm">My home</Link>
                   <LogoutButton />
                 </>
               ) : (
@@ -227,7 +227,7 @@ function GovernmentFooter() {
       <div className="gov-wrap gov-footer-bottom">
         <span>© {new Date().getFullYear()} Health &amp; Family Welfare Department, Government of Assam · Demonstration deployment with synthetic data.</span>
         <span className="gov-credit">
-          Photographs: Assam Medical College &amp; Hospital by Pranabnlp (CC BY-SA 4.0); Prime Minister&apos;s Office (GODL-India).
+          Photographs: Assam Medical College &amp; Hospital by Pranabnlp (CC BY-SA 4.0); village gathering by Sumita Roy Dutta (CC BY-SA 4.0).
         </span>
       </div>
     </footer>

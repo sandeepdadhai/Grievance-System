@@ -170,6 +170,19 @@ export default function Home() {
         </div>
       </section>
 
+      {government && (
+        <section className="gov-crowd">
+          <div className="gov-wrap">
+            <figure>
+              <img src="/assam/crowd.jpg" alt="Villagers from rural India gathered together in a crowd" loading="lazy" />
+              <figcaption>
+                A village gathering in India. Photograph: Sumita Roy Dutta, Wikimedia Commons, CC BY-SA 4.0.
+              </figcaption>
+            </figure>
+          </div>
+        </section>
+      )}
+
       <section className="section" style={{ paddingTop: 10 }}>
         <div className="grid-2">
           <div className="card">
@@ -228,29 +241,6 @@ export default function Home() {
         </div>
       </section>
 
-      {government && (
-        <section className="gov-leaders">
-          <div className="gov-wrap">
-            <h2>Health services for every village of Assam</h2>
-            <p>
-              Grievance redressal sits inside the department&apos;s wider effort to take health services to every district, block
-              and village of Assam, so a patient&apos;s complaint reaches the facility and the department without a journey to
-              Guwahati.
-            </p>
-            <figure>
-              <img
-                src="/assam/leaders.jpg"
-                alt="Prime Minister Narendra Modi and Chief Minister Himanta Biswa Sarma at the swearing-in ceremony of the Government of Assam in Guwahati"
-                loading="lazy"
-              />
-              <figcaption>
-                Prime Minister Narendra Modi with Chief Minister Himanta Biswa Sarma at the swearing-in ceremony of the Government
-                of Assam, Guwahati. Photograph: Prime Minister&apos;s Office, GODL-India (Wikimedia Commons).
-              </figcaption>
-            </figure>
-          </div>
-        </section>
-      )}
     </>
   );
 }

@@ -1025,13 +1025,11 @@ pre.payload { background: var(--code-bg); border: 1px solid var(--line); border-
 
 /* -------------------------------- photo band ----------------------------- */
 
-.gov-leaders { background: #ffffff; border-top: 1px solid #d4dae3; border-bottom: 4px solid #f58220; }
-.gov-leaders .gov-wrap { padding-top: 26px; padding-bottom: 26px; }
-.gov-leaders h2 { font-size: 1.2rem; border-left: 5px solid #137b3f; padding-left: 12px; }
-.gov-leaders p { color: #4b5866; font-size: 13px; margin-top: 8px; max-width: 760px; }
-.gov-leaders figure { margin: 16px 0 0; }
-.gov-leaders img { width: 100%; max-width: 1100px; display: block; border: 1px solid #cfd6e0; padding: 6px; background: #ffffff; }
-.gov-leaders figcaption { font-size: 11px; color: #55606d; margin-top: 6px; }
+.gov-crowd { background: #ffffff; border-top: 1px solid #d4dae3; border-bottom: 1px solid #d4dae3; }
+.gov-crowd .gov-wrap { padding-top: 24px; padding-bottom: 24px; }
+.gov-crowd figure { margin: 0; }
+.gov-crowd img { width: 100%; max-height: 460px; object-fit: cover; display: block; border: 1px solid #cfd6e0; padding: 6px; background: #ffffff; }
+.gov-crowd figcaption { font-size: 11px; color: #55606d; margin-top: 6px; }
 
 /* ---------------------------------- footer ------------------------------- */
 
