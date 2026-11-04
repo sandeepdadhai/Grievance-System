@@ -163,8 +163,9 @@ export default function AdminTheme() {
       <div className="card">
         <div className="row-between">
           <p className="small muted" style={{ maxWidth: 580 }}>
-            Government palettes follow the convention of Assam health directorate portals: white and parchment surfaces,
-            a deep green masthead, serif headings, square corners and the tricolour rule.{" "}
+            Government palettes follow real departmental conventions: Assam health directorate portals (green masthead,
+            serif headings, tricolour rule), US federal health agencies (navy masthead, action blue, squared corners) and
+            Chinese health commissions (red masthead, gold rules).{" "}
             {settings?.updatedAt
               ? `Last change ${formatDate(settings.updatedAt, { hour: "2-digit", minute: "2-digit" })}${settings.updatedBy ? ` by ${settings.updatedBy}` : ""}.`
               : "The built-in default palette is in use."}

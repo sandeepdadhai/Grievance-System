@@ -798,6 +798,203 @@ pre.payload { background: var(--code-bg); border: 1px solid var(--line); border-
   --info-text: #1d4ed8;
 }
 
+/* United States federal health presentation, following HHS, Medicare.gov and
+   CDC conventions: navy masthead, #005ea2 action blue, grey page with thin
+   borders, squared corners and heavy sans headings. */
+:root[data-theme="us-health"] {
+  --bg: #f0f0f0;
+  --bg-2: #ffffff;
+  --panel: #ffffff;
+  --panel-2: #f7f9fa;
+  --panel-3: #eef2f5;
+  --line: #dfe1e2;
+  --line-strong: #b9c0c7;
+  --text: #1b1b1b;
+  --text-2: #3d4551;
+  --muted: #55606e;
+  --faint: #71767c;
+  --accent: #005ea2;
+  --accent-soft: #e7f1f9;
+  --accent-2: #005ea2;
+  --danger: #b50909;
+  --danger-soft: #fbeaea;
+  --warn: #c2850c;
+  --warn-soft: #fdf6e3;
+  --ok: #2e8540;
+  --ok-soft: #eaf5ec;
+  --info: #1a4480;
+  --info-soft: #e7f1f9;
+  --radius: 2px;
+  --radius-sm: 2px;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --font-display: "Public Sans", "Source Sans Pro", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --body-bg: linear-gradient(180deg, #e3e8ee 0, #f0f0f0 260px, #f0f0f0 100%);
+  --sidebar-bg: linear-gradient(180deg, #ffffff, #f4f6f8);
+  --topbar-bg: #ffffff;
+  --header-bg: #112e51;
+  --card-bg: #ffffff;
+  --kpi-bg: #ffffff;
+  --kpi-alert-bg: linear-gradient(170deg, #fbeaea, #f7d7d7);
+  --console-bg: #ffffff;
+  --panel-solid: #ffffff;
+  --input-bg: #ffffff;
+  --thead-bg: #eef2f5;
+  --soft-bg: #f7f9fa;
+  --subtle-bg: #f0f2f4;
+  --hover-bg: #e7f1f9;
+  --hover-strong-bg: #d6e6f4;
+  --row-hover-bg: #f7f9fa;
+  --btn-bg: #ffffff;
+  --btn-hover-bg: #e7f1f9;
+  --btn-primary-bg: #005ea2;
+  --btn-primary-hover-bg: #1a4480;
+  --nav-active-bg: #005ea2;
+  --nav-active-border: #ffbe2e;
+  --nav-active-text: #ffffff;
+  --accent-2-soft: #cfe3f3;
+  --accent-line: #9dc3e6;
+  --accent-ink: #ffffff;
+  --accent-ink-strong: #ffffff;
+  --accent-text: #005ea2;
+  --focus-border: #2491ff;
+  --focus-ring: rgba(36, 145, 255, 0.22);
+  --overlay: rgba(17, 46, 81, 0.55);
+  --brand-mark-bg: #005ea2;
+  --brand-mark-shadow: none;
+  --avatar-bg: #1a4480;
+  --hero-mid: #ffbe2e;
+  --auth-aside-bg: linear-gradient(180deg, #e7f1f9, #ffffff);
+  --code-bg: #112e51;
+  --code-text: #d6e6f4;
+  --placeholder: #71767c;
+  --ok-text: #1f6b31;
+  --warn-text: #8a5a00;
+  --danger-text: #8b0505;
+  --info-text: #1a4480;
+}
+
+:root[data-theme="us-health"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 6px;
+  z-index: 70;
+  background: linear-gradient(90deg, #112e51 0 62%, #005ea2 62% 80%, #b50909 80% 100%);
+}
+
+:root[data-theme="us-health"] .site-header { border-bottom: 4px solid #005ea2; }
+:root[data-theme="us-health"] .site-header .brand-name { color: #ffffff; }
+:root[data-theme="us-health"] .site-header .brand-sub { color: #a9c6e4; }
+:root[data-theme="us-health"] .site-nav a { color: #d6e6f4; border-radius: 0; padding: 8px 14px; }
+:root[data-theme="us-health"] .site-nav a:hover { background: #1a4480; color: #ffffff; }
+:root[data-theme="us-health"] .site-nav a.active { background: #005ea2; color: #ffffff; }
+:root[data-theme="us-health"] .site-header .btn.ghost { color: #d6e6f4; border-color: #51708f; background: transparent; }
+:root[data-theme="us-health"] .site-header .btn.ghost:hover { color: #ffffff; background: #1a4480; }
+:root[data-theme="us-health"] .site-header .btn.primary { background: #ffbe2e; border-color: #ffbe2e; color: #1b1b1b; }
+:root[data-theme="us-health"] .site-header .btn.primary:hover { background: #ffd47e; }
+:root[data-theme="us-health"] .card { border: 1px solid #dfe1e2; box-shadow: none; }
+:root[data-theme="us-health"] h1,
+:root[data-theme="us-health"] h2,
+:root[data-theme="us-health"] h3 { letter-spacing: -0.01em; font-weight: 700; }
+
+/* China National Health Commission presentation: deep red masthead with gold
+   hairlines, warm off-white page, squared corners and bold sans headings. */
+:root[data-theme="china-health"] {
+  --bg: #faf6f1;
+  --bg-2: #ffffff;
+  --panel: #ffffff;
+  --panel-2: #fdfaf6;
+  --panel-3: #f6efe5;
+  --line: #e6dccf;
+  --line-strong: #cfc0ab;
+  --text: #241f1a;
+  --text-2: #43392f;
+  --muted: #6b5d4e;
+  --faint: #8a7a68;
+  --accent: #b81b22;
+  --accent-soft: #fbebea;
+  --accent-2: #a6141b;
+  --danger: #a11a1a;
+  --danger-soft: #fbe9e7;
+  --warn: #a97416;
+  --warn-soft: #fdf4df;
+  --ok: #1c7a3e;
+  --ok-soft: #e9f4ec;
+  --info: #8c5a12;
+  --info-soft: #fbf1de;
+  --radius: 0;
+  --radius-sm: 0;
+  --shadow: 0 1px 2px rgba(36, 31, 26, 0.08);
+  --font-display: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  --body-bg: linear-gradient(180deg, #f3e9dc 0, #faf6f1 240px, #faf6f1 100%);
+  --sidebar-bg: linear-gradient(180deg, #ffffff, #fbf5ee);
+  --topbar-bg: #ffffff;
+  --header-bg: #9e1b1b;
+  --card-bg: #ffffff;
+  --kpi-bg: #ffffff;
+  --kpi-alert-bg: linear-gradient(170deg, #fbe9e7, #f6d5d1);
+  --console-bg: #ffffff;
+  --panel-solid: #ffffff;
+  --input-bg: #ffffff;
+  --thead-bg: #f6efe5;
+  --soft-bg: #fdfaf6;
+  --subtle-bg: #f8f1e7;
+  --hover-bg: #fbebea;
+  --hover-strong-bg: #f5dcd9;
+  --row-hover-bg: #fdfaf6;
+  --btn-bg: #ffffff;
+  --btn-hover-bg: #fbebea;
+  --btn-primary-bg: #b81b22;
+  --btn-primary-hover-bg: #9e1b1b;
+  --nav-active-bg: #7d1414;
+  --nav-active-border: #d4a017;
+  --nav-active-text: #ffffff;
+  --accent-2-soft: #f3d9d7;
+  --accent-line: #e3b3ae;
+  --accent-ink: #ffffff;
+  --accent-ink-strong: #ffffff;
+  --accent-text: #a6141b;
+  --focus-border: #b81b22;
+  --focus-ring: rgba(184, 27, 34, 0.18);
+  --overlay: rgba(60, 20, 18, 0.5);
+  --brand-mark-bg: #9e1b1b;
+  --brand-mark-shadow: none;
+  --avatar-bg: #b81b22;
+  --hero-mid: #f0c14b;
+  --auth-aside-bg: linear-gradient(180deg, #fbebea, #ffffff);
+  --code-bg: #3a1111;
+  --code-text: #f3d9d7;
+  --placeholder: #8a7a68;
+  --ok-text: #14612f;
+  --warn-text: #7d5410;
+  --danger-text: #8a1414;
+  --info-text: #6f470e;
+}
+
+:root[data-theme="china-health"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 5px;
+  z-index: 70;
+  background: linear-gradient(90deg, #9e1b1b 0 88%, #d4a017 88% 100%);
+}
+
+:root[data-theme="china-health"] .site-header { border-bottom: 4px solid #d4a017; }
+:root[data-theme="china-health"] .site-header .brand-name { color: #ffffff; }
+:root[data-theme="china-health"] .site-header .brand-sub { color: #f3d9b8; }
+:root[data-theme="china-health"] .site-nav a { color: #f7e6d0; border-radius: 0; padding: 8px 14px; }
+:root[data-theme="china-health"] .site-nav a:hover { background: #7d1414; color: #ffffff; }
+:root[data-theme="china-health"] .site-nav a.active { background: #7d1414; color: #ffffff; box-shadow: inset 0 -3px 0 #d4a017; }
+:root[data-theme="china-health"] .site-header .btn.ghost { color: #f7e6d0; border-color: #c07a6a; background: transparent; }
+:root[data-theme="china-health"] .site-header .btn.ghost:hover { color: #ffffff; background: #7d1414; }
+:root[data-theme="china-health"] .site-header .btn.primary { background: #d4a017; border-color: #d4a017; color: #241f1a; }
+:root[data-theme="china-health"] .site-header .btn.primary:hover { background: #e6b83f; }
+:root[data-theme="china-health"] .card { border: 1px solid #e6dccf; box-shadow: none; }
+:root[data-theme="china-health"] h1,
+:root[data-theme="china-health"] h2,
+:root[data-theme="china-health"] h3 { font-weight: 700; letter-spacing: 0; }
+
 /* Government presets carry the tricolour rule that state portals use as a
    masthead band. It sits above every fixed/sticky surface. */
 :root[data-theme="assam-health"] body::before,

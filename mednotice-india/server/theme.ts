@@ -50,6 +50,22 @@ export const THEME_PRESETS: ThemePreset[] = [
     swatches: ["#ffffff", "#eaf0f8", "#12457a", "#d97706"],
   },
   {
+    id: "us-health",
+    name: "US federal health (HHS)",
+    family: "government",
+    description:
+      "United States federal health style, following HHS, Medicare.gov and CDC conventions: navy masthead, action blue, grey page with hairline borders, squared corners and heavy sans headings.",
+    swatches: ["#112e51", "#ffffff", "#005ea2", "#ffbe2e"],
+  },
+  {
+    id: "china-health",
+    name: "China health commission",
+    family: "government",
+    description:
+      "Chinese health-commission style, following National Health Commission portals: deep red masthead with gold hairlines, warm off-white page, squared corners and bold sans headings.",
+    swatches: ["#9e1b1b", "#faf6f1", "#b81b22", "#d4a017"],
+  },
+  {
     id: "enterprise",
     name: "Enterprise light",
     family: "enterprise",

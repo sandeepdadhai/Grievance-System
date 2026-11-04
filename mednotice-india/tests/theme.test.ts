@@ -65,9 +65,9 @@ test("appearance themes", async (t) => {
     assert.equal(theme.defaultTheme, "midnight");
     assert.deepEqual(
       theme.presets.map((preset) => preset.id),
-      ["midnight", "assam-health", "national-health", "enterprise"],
+      ["midnight", "assam-health", "national-health", "us-health", "china-health", "enterprise"],
     );
-    assert.equal(theme.presets.filter((preset) => preset.family === "government").length, 2);
+    assert.equal(theme.presets.filter((preset) => preset.family === "government").length, 4);
   });
 
   await t.test("only a super administrator may repaint the platform", async () => {

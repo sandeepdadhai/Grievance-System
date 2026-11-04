@@ -878,7 +878,7 @@ process, KMS-backed keys and legal review under Indian law.
 
 ---
 
-## Interface themes (Assam Health Department, enterprise)
+## Interface themes (Assam, US federal, China, enterprise)
 
 The look of both front ends is a **runtime setting**, not a build flag: every palette ships inside the shared
 stylesheet and the database records which one each surface uses. A super administrator can switch palettes at any
@@ -894,6 +894,8 @@ portal palette applies to visitors on their next page load.
 | `midnight` *(default)* | Dark | 24×7 monitoring desks — the original dark console |
 | `assam-health` | Government | Assam Health Department demonstration: white and parchment surfaces, deep green masthead, serif headings, squared-off corners and the tricolour rule |
 | `national-health` | Government | Central programme reviews: white panels, navy masthead, saffron highlights |
+| `us-health` | Government | US federal health agencies: navy masthead, `#005ea2` action blue, grey page, hairline borders, squared corners, bold sans headings |
+| `china-health` | Government | Chinese health commissions: deep red masthead with gold rules, warm off-white page, squared corners, bold sans headings |
 | `enterprise` | Enterprise | Private hospital groups and health-tech partners: white cards, indigo accents, soft elevation |
 
 `assam-health` is not a recolour of the default shell. For the patient portal it renders the structure Assam health
