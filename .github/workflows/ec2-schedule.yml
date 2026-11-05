@@ -33,7 +33,7 @@ on:
 
 env:
   AWS_REGION: ap-southeast-2
-  INSTANCE_ID: i-09591a814f5600b70
+  INSTANCE_ID: i-07f6a58b57ebf1fb4
 
 jobs:
   power:

@@ -1,8 +1,13 @@
 # Deploying mednotice-india to AWS EC2
 
-Live demo (deployed from this directory): **http://3.104.125.124/** — Sydney,
-`t3.micro`, no custom domain, plain HTTP. That is the Elastic IP, so it is the
-same address before and after the nightly stop/start.
+Live demo (deployed from this directory): **http://54.79.127.229/** — Sydney,
+`t3.micro`, no custom domain, plain HTTP, instance `i-07f6a58b57ebf1fb4`.
+
+That is the instance's **auto-assigned** public IPv4: the Elastic IP could not
+be re-attached after the 2026-11-05 rebuild because `ec2:AssociateAddress` is
+now denied for `samagent`. A stop/start therefore changes the address and the
+URL until either that permission is granted or the address is attached in the
+console (EC2 → Elastic IPs → Associate).
 
 The MedNotice Global instance (`i-085640db7a6f9ead8`) was **terminated on
 2026-10-28**; its code stays in the repository but nothing is deployed for it.
@@ -30,8 +35,8 @@ asleep after its nightly stop.
 Start it by hand at any time:
 
 ```bash
-aws ec2 start-instances --region ap-southeast-2 --instance-ids i-09591a814f5600b70
-aws ec2 describe-instances --region ap-southeast-2 --instance-ids i-09591a814f5600b70 \
+aws ec2 start-instances --region ap-southeast-2 --instance-ids i-07f6a58b57ebf1fb4
+aws ec2 describe-instances --region ap-southeast-2 --instance-ids i-07f6a58b57ebf1fb4 \
   --query 'Reservations[0].Instances[0].PublicIpAddress' --output text
 ```
 
@@ -40,11 +45,16 @@ Elastic IP below is for.
 
 ## Elastic IP (static address)
 
-**Assigned: `3.104.125.124`** (2026-11-02), attached to instance
-`i-09591a814f5600b70`. Before this, every nightly stop/start handed out a new
-public address and broke both URLs. `elastic-ip.sh` allocates and associates
-it, and is safe to re-run — it reuses the associated address rather than
-allocating a second one:
+**Not attached since the 2026-11-05 rebuild.** The previous address
+`3.104.125.124` was left allocated when the terminated instance was cleaned up
+(`ec2:ReleaseAddress` is denied for `samagent`), and `ec2:AssociateAddress` is
+denied too, so `elastic-ip.sh` cannot re-attach it. Release that idle address in
+the console so it stops billing, and attach an Elastic IP by hand if the URL
+must survive the nightly stop/start.
+
+`elastic-ip.sh` still works in an account where the associate/release actions
+are allowed; it reuses an associated address rather than allocating a second
+one:
 
 ```bash
 set -a; . ../.env; set +a      # AWS_ACCESS_KEY_ID / SECRET / AWS_DEFAULT_REGION
@@ -130,14 +140,17 @@ Run `./bootstrap.sh` once in a fresh account (it is idempotent and prints the tw
 
 ## Terraform state caveat
 
-`terraform apply` created the instance (`i-09591a814f5600b70`) but then failed to *read it back*
-(`ec2:DescribeInstanceAttribute` is denied), so **the instance is not in `terraform.tfstate`**.
-`terraform destroy` will therefore not remove it. Either:
+The 2026-11-05 rebuild ran `terraform apply` and it created the instance
+(`i-07f6a58b57ebf1fb4`) but then failed to *read it back*: `ec2:DescribeInstanceAttribute` is
+now denied. The instance **is** recorded in `terraform.tfstate`, but no later `apply`, `plan`
+or `destroy` can refresh it, and `aws_eip.app` was never created because the run aborted first.
 
-* grant `ec2:DescribeInstanceAttribute` (and `ec2:DescribeInstanceCreditSpecifications`) to the
-  user, then `terraform import aws_instance.app i-09591a814f5600b70`; or
-* delete it by hand: terminate the instance, then delete the security group, key pair, role and
-  instance profile listed above.
+So treat the instance as unmanaged until the IAM user can read attributes again:
+
+* grant `ec2:DescribeInstanceAttribute` (and `ec2:DescribeInstanceCreditSpecifications`), then
+  `terraform import aws_eip.app <allocation-id>` after associating an address; or
+* operate it with the AWS CLI / console, as the rebuild did — the deploy path is
+  `scripts/deploy.sh` with `SSH_HOST` set to the current public IPv4.
 
 ## What the instance does at boot (`user-data.sh`)
 
@@ -192,7 +205,21 @@ Without them the channel stays in simulation: the message payload is written to
 see exactly what would have been delivered. Keep the token out of the repo — it belongs only in this
 file (mode `0600`).
 
-## Verified after deploy
+## Verified after the 2026-11-05 rebuild
+
+| Check | Result |
+| --- | --- |
+| `http://54.79.127.229/` | 200, title "Health & Family Welfare Department, Government of Assam · Patient grievance portal" |
+| `/api/health` | 200, `auditChain.valid: true` over 27,571 rows after the restore |
+| `/assam/emblem.svg`, `/assam/favicon.svg`, `/assam/banner-gmch.jpg` | 200 |
+| staff console `http://54.79.127.229:4100/admin` | 401 Basic-auth challenge from outside the VM; local 4100 returns 401 as designed |
+| data restored | `mednotice-backup-20261105.tar.gz` extracted into `/var/lib/mednotice` (sqlite, `storage/`, `outbox/`, `.master.key`) |
+| deploy | `GIT_BRANCH=develop_assam scripts/deploy.sh` → commit `557dc13`, both services active |
+
+The deploy script reports the console as unreachable (`000`) when it runs from a sandbox
+that blocks outbound port 4100 — check it from a normal network before treating that as a fault.
+
+## Verified after an earlier deploy
 
 Deployed from commit `99e3a70` ("Notify registered patients over WhatsApp when a case is filed and when it changes").
 
