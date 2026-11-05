@@ -1,2 +1,5 @@
 # agent tooling binaries (cloudflared, terraform, etc.)
 .tools/
+
+# Local database backups (patient data, never commit)
+mednotice-backup-*.tar.gz
