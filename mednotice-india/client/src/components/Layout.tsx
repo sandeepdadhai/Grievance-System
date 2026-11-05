@@ -13,29 +13,16 @@ import { Icon } from "./ui";
 export const STAFF_CONSOLE_URL = ((import.meta.env.VITE_ADMIN_URL as string | undefined) ?? "http://localhost:4101").replace(/\/+$/, "");
 
 /**
- * Wordmark for both surfaces. The Assam Health Department preset swaps the
- * MedNotice lockup for the departmental crest, so the console sidebar and the
- * sign-in screen carry the same identity as the patient masthead.
+ * Wordmark for both surfaces: the departmental crest and name, so the patient
+ * masthead, the console sidebar and the sign-in screens carry one identity.
  */
 export function Brand() {
-  const { applied } = useTheme();
-  if (applied === "assam-health") {
-    return (
-      <Link to="/" className="brand">
-        <img className="brand-emblem" src="/assam/emblem.svg" alt="Health and Family Welfare Department, Government of Assam" />
-        <span>
-          <span className="brand-name" style={{ display: "block" }}>Health &amp; Family Welfare</span>
-          <span className="brand-sub" style={{ display: "block" }}>Government of Assam</span>
-        </span>
-      </Link>
-    );
-  }
   return (
     <Link to="/" className="brand">
-      <span className="brand-mark">MN</span>
+      <img className="brand-emblem" src="/assam/emblem.svg" alt="Health and Family Welfare Department, Government of Assam" />
       <span>
-        <span className="brand-name">MedNotice</span>
-        <span className="brand-sub" style={{ display: "block" }}>India</span>
+        <span className="brand-name" style={{ display: "block" }}>Health &amp; Family Welfare</span>
+        <span className="brand-sub" style={{ display: "block" }}>Government of Assam</span>
       </span>
     </Link>
   );
@@ -86,7 +73,7 @@ export function PublicLayout() {
       </main>
       <footer className="site-footer">
         <div>
-          <strong style={{ color: "var(--text-2)" }}>MedNotice India</strong> · Patient grievance infrastructure for India
+          <strong style={{ color: "var(--text-2)" }}>Health &amp; Family Welfare Department</strong> · Government of Assam
           <div style={{ marginTop: 4 }}>Reference implementation · synthetic data only</div>
         </div>
         <div className="row" style={{ gap: 16 }}>
@@ -328,7 +315,7 @@ export function AdminLayout() {
                 ? "India · national scope"
                 : "All India scope"}
             <span className="faint">·</span>
-            <span className="faint">{user.organisation ?? "MedNotice India"}</span>
+            <span className="faint">{user.organisation ?? "Government of Assam"}</span>
           </div>
           <div className="row" style={{ gap: 8 }}>
             <span className="chip mono">AES-256-GCM</span>

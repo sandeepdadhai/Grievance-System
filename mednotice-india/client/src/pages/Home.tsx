@@ -69,7 +69,7 @@ export default function Home() {
             <p className="hero-lead">
               {government
                 ? "File a grievance about treatment received at a government or empanelled health facility in Assam, attach your records, and follow the case until the department closes it. Every submission is acknowledged, routed to the facility named in the complaint and recorded in an audit trail."
-                : "MedNotice India ingests grievances and treatment records from patients across the country, screens documents for tampering, triages clinical urgency against Indian regulation, and delivers a complete case file to MoHFW, the National Health Authority or the relevant State Health Department."}
+                : "The department ingests grievance and treatment records from patients, screens documents for tampering, triages clinical urgency against Indian regulation, and delivers a complete case file to the facility, MoHFW, the National Health Authority or the relevant State Health Department."}
             </p>
             <div className="hero-actions">
               <Link to="/submit" className="btn primary">
@@ -90,7 +90,7 @@ export default function Home() {
           <div className="console-card fade-in" aria-label="Example verification console">
             <div className="console-head">
               <div className="row" style={{ gap: 8 }}>
-                <span className="brand-mark" style={{ width: 22, height: 22, borderRadius: 6, fontSize: 10 }}>MN</span>
+                <img className="brand-emblem" src="/assam/emblem.svg" alt="" style={{ width: 22, height: 22 }} />
                 <span className="small" style={{ color: "var(--text-2)", fontWeight: 600 }}>Verification console</span>
               </div>
               <div className="console-tabs">

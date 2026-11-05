@@ -127,12 +127,6 @@ ul { margin: 0; padding-left: 1.2rem; }
 
 .brand { display: flex; align-items: center; gap: 11px; padding: 2px 8px 0; }
 .brand:hover { text-decoration: none; }
-.brand-mark {
-  width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
-  background: var(--brand-mark-bg);
-  display: grid; place-items: center; color: var(--accent-ink-strong); font-weight: 800; font-size: 15px;
-  box-shadow: var(--brand-mark-shadow);
-}
 .brand-name { font-weight: 700; font-size: 15px; color: var(--text); letter-spacing: -0.02em; line-height: 1.15; }
 .brand-sub { font-size: 10.5px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.16em; }
 

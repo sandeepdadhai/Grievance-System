@@ -220,7 +220,7 @@ const otpVerifySchema = z.object({
 
 function otpMessage(code: string): string {
   const minutes = Math.max(1, Math.round(OTP_TTL_SECONDS / 60));
-  return `MedNotice India: ${code} is your one-time sign-in code. It expires in ${minutes} minute(s). Do not share it with anyone.`;
+  return `Health Department, Government of Assam: ${code} is your one-time sign-in code. It expires in ${minutes} minute(s). Do not share it with anyone.`;
 }
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -289,7 +289,7 @@ authRouter.post(
       identifier,
       channel,
       userId: user.id,
-      subject: "Your MedNotice India sign-in code",
+      subject: "Your Health Department sign-in code",
       message: otpMessage,
     });
     const masked = channel === "EMAIL" ? maskEmail(identifier) : maskMobile(identifier);
@@ -368,7 +368,7 @@ authRouter.post(
       throw new HttpError(400, "Add a mobile number to your account first — the verification code is sent to that number.");
     }
     const taken = get<{ id: string }>("SELECT id FROM users WHERE aadhaar_hash = ? AND id <> ?", hashAadhaar(check.digits), user.id);
-    if (taken) throw new HttpError(409, "That Aadhaar number is already linked to another MedNotice account.");
+    if (taken) throw new HttpError(409, "That Aadhaar number is already linked to another account on this portal.");
     if (recentChallengeCount("AADHAAR", mobile, 10 * 60_000) >= 5) {
       throw new HttpError(429, "Too many verification codes requested. Wait ten minutes and try again.");
     }
@@ -378,7 +378,7 @@ authRouter.post(
       userId: user.id,
       payload: check.digits,
       message: (code) =>
-        `MedNotice India: ${code} is your Aadhaar verification code. It expires in ${Math.max(1, Math.round(OTP_TTL_SECONDS / 60))} minute(s). Never share it.`,
+        `Health Department, Government of Assam: ${code} is your Aadhaar verification code. It expires in ${Math.max(1, Math.round(OTP_TTL_SECONDS / 60))} minute(s). Never share it.`,
     });
     audit({
       actor: { id: user.id, role: user.role },

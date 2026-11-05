@@ -734,7 +734,7 @@ export default function Submit() {
             <label className="check">
               <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
               <span>
-                I consent to MedNotice India processing this grievance and its attachments, verifying documents with the NMC
+                I consent to the Health &amp; Family Welfare Department, Government of Assam, processing this grievance and its attachments, verifying documents with the NMC
                 registration registry, and transmitting the case to <strong>{authority?.name ?? "the selected authority"}</strong>{" "}
                 under the Digital Personal Data Protection Act 2023 and the Charter of Patients' Rights.
               </span>

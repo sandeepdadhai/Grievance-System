@@ -150,7 +150,7 @@ export async function createChallenge(opts: {
     channel === "EMAIL"
       ? await sendEmail({
           to: opts.identifier,
-          subject: opts.subject ?? "Your MedNotice India one-time password",
+          subject: opts.subject ?? "Your Health Department one-time password",
           text,
           kind: opts.purpose,
         })

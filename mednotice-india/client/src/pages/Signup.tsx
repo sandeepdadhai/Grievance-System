@@ -44,10 +44,10 @@ export default function Signup() {
     <div className="auth-shell">
       <aside className="auth-aside">
         <Link to="/" className="brand" style={{ padding: 0 }}>
-          <span className="brand-mark">MN</span>
+          <img className="brand-emblem" src="/assam/emblem.svg" alt="" />
           <span>
-            <span className="brand-name">MedNotice</span>
-            <span className="brand-sub" style={{ display: "block" }}>India</span>
+            <span className="brand-name" style={{ display: "block" }}>Health &amp; Family Welfare</span>
+            <span className="brand-sub" style={{ display: "block" }}>Government of Assam</span>
           </span>
         </Link>
         <div style={{ maxWidth: 440 }}>
@@ -103,7 +103,7 @@ export default function Signup() {
             <label className="check">
               <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
               <span>
-                I agree to MedNotice India processing my grievance data under the DPDP Act 2023 to route and resolve complaints.
+                I agree to the Health &amp; Family Welfare Department, Government of Assam, processing my grievance data under the DPDP Act 2023 to route and resolve complaints.
                 I understand documents are shared only with the selected health authority.
               </span>
             </label>

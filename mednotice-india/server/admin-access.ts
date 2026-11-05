@@ -49,7 +49,7 @@ export function adminConsoleGate(req: Request, res: Response, next: NextFunction
   }
 
   if (!basicCredentialsValid(req)) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="MedNotice staff console", charset="UTF-8"');
+    res.setHeader("WWW-Authenticate", 'Basic realm="Health Department staff console", charset="UTF-8"');
     res.status(401).type("text/plain").send("Authentication required.");
     return;
   }

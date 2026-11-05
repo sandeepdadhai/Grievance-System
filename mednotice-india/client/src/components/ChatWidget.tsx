@@ -78,18 +78,18 @@ export function ChatWidget() {
 
   if (!open) {
     return (
-      <button className="chat-fab" type="button" onClick={() => setOpen(true)} aria-label="Open the MedNotice assistant">
+      <button className="chat-fab" type="button" onClick={() => setOpen(true)} aria-label="Open the departmental assistant">
         <Icon name="clipboard" size={19} />
-        <span>Ask MedNotice</span>
+        <span>Ask the department</span>
       </button>
     );
   }
 
   return (
-    <div className="chat-panel" role="dialog" aria-label="MedNotice assistant">
+    <div className="chat-panel" role="dialog" aria-label="Departmental assistant">
       <div className="chat-head">
         <div>
-          <strong>MedNotice assistant</strong>
+          <strong>Department assistant</strong>
           <span>Case status &amp; general queries</span>
         </div>
         <button className="btn ghost icon-btn" type="button" onClick={() => setOpen(false)} aria-label="Close assistant">

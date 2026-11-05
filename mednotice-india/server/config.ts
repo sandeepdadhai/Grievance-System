@@ -108,7 +108,7 @@ export const SMS_DEFAULT_COUNTRY = process.env.SMS_DEFAULT_COUNTRY ?? "91";
 export const EMAIL_ENABLED = process.env.EMAIL_ENABLED !== "0";
 export const EMAIL_API_URL = process.env.EMAIL_API_URL ?? "";
 export const EMAIL_API_KEY = process.env.EMAIL_API_KEY ?? "";
-export const EMAIL_FROM = process.env.EMAIL_FROM ?? "MedNotice India <no-reply@mednotice.in>";
+export const EMAIL_FROM = process.env.EMAIL_FROM ?? "Health & Family Welfare Department, Government of Assam <no-reply@mednotice.in>";
 export const EMAIL_SIMULATE = process.env.EMAIL_SIMULATE === "1";
 /** One-time password lifetime in seconds. */
 export const OTP_TTL_SECONDS = Math.max(60, Number(process.env.OTP_TTL_SECONDS ?? 300));
@@ -184,7 +184,7 @@ const UNIVERSAL_CATEGORIES = [
 ];
 
 /**
- * MedNotice India tenancy registry. The platform is India-only: every case is
+ * Jurisdiction registry. The platform is India-only: every case is
  * scoped to the Indian Union and routed to a national authority or to the
  * health department of the state in which the facility is registered.
  */

@@ -187,8 +187,8 @@ function faq(intent: ChatIntent, hi: boolean): ChatReply {
       return {
         intent,
         reply: pick(
-          "Filing, tracking and escalating a grievance on MedNotice India is free for patients. You do not need an account, and the platform never asks for payment to route a case to a health authority. Treat any request for money in the name of this portal as fraudulent.",
-          "मेडनोटिस इंडिया पर शिकायत दर्ज करना, ट्रैक करना और आगे बढ़ाना रोगियों के लिए निःशुल्क है। खाता ज़रूरी नहीं है और यह प्लेटफ़ॉर्म केस प्राधिकरण तक भेजने के लिए कभी भुगतान नहीं मांगता। इस पोर्टल के नाम पर पैसे की मांग को धोखाधड़ी मानें।",
+          "Filing, tracking and escalating a grievance on this portal is free for patients. You do not need an account, and the department never asks for payment to route a case to a health authority. Treat any request for money in the name of this portal as fraudulent.",
+          "इस पोर्टल पर शिकायत दर्ज करना, ट्रैक करना और आगे बढ़ाना रोगियों के लिए निःशुल्क है। खाता ज़रूरी नहीं है और विभाग केस प्राधिकरण तक भेजने के लिए कभी भुगतान नहीं मांगता। इस पोर्टल के नाम पर पैसे की मांग को धोखाधड़ी मानें।",
         ),
         suggestions: [S.submit, S.track],
       };

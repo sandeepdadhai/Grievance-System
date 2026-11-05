@@ -69,10 +69,10 @@ type SeedUser = {
 };
 
 const USERS: SeedUser[] = [
-  { id: "USR-ADMIN", email: "admin@mednotice.in", name: "Ananya Krishnan", password: "Admin!2345", role: "SUPER_ADMIN", country: null, organisation: "MedNotice India" },
+  { id: "USR-ADMIN", email: "admin@mednotice.in", name: "Ananya Krishnan", password: "Admin!2345", role: "SUPER_ADMIN", country: null, organisation: "Government of Assam" },
   { id: "USR-MINISTRY", email: "reviewer@mohfw.gov.in", name: "Dr. Rakesh Menon", password: "Review!2345", role: "MINISTRY_REVIEWER", country: "IN", organisation: "Ministry of Health and Family Welfare" },
   { id: "USR-HOSPITAL", email: "compliance@aiims.edu", name: "Dr. Neha Bansal", password: "Comply!2345", role: "HOSPITAL_COMPLIANCE", country: "IN", organisation: "All India Institute of Medical Sciences" },
-  { id: "USR-AUDITOR", email: "auditor@mednotice.in", name: "Vikram Sethi", password: "Audit!2345", role: "SYSTEM_AUDITOR", country: null, organisation: "MedNotice India" },
+  { id: "USR-AUDITOR", email: "auditor@mednotice.in", name: "Vikram Sethi", password: "Audit!2345", role: "SYSTEM_AUDITOR", country: null, organisation: "Government of Assam" },
   { id: "USR-PATIENT", email: "patient@demo.in", name: "Meera Sharma", password: "Patient!2345", role: "PATIENT", country: "IN", organisation: null },
   { id: "USR-PATIENT-HI", email: "rahul.verma@demo.in", name: "Rahul Verma", password: "Patient!2345", role: "PATIENT", country: "IN", organisation: null },
 ];

@@ -5,7 +5,7 @@ import { Alert, Icon } from "../../components/ui";
 import { Brand } from "../../components/Layout";
 
 const DEMOS = [
-  { email: "admin@mednotice.in", password: "Admin!2345", label: "Super Administrator", org: "MedNotice India" },
+  { email: "admin@mednotice.in", password: "Admin!2345", label: "Super Administrator", org: "Government of Assam" },
   { email: "reviewer@mohfw.gov.in", password: "Review!2345", label: "Ministry Reviewer", org: "India · MoHFW" },
   { email: "compliance@aiims.edu", password: "Comply!2345", label: "Hospital Compliance", org: "India · AIIMS" },
   { email: "facility.aiims@mednotice.in", password: "Facility!2345", label: "Facility officer", org: "AIIMS New Delhi" },
@@ -35,7 +35,7 @@ export default function AdminLogin() {
   useEffect(() => {
     if (!user) return;
     if (user.baseRole === "PATIENT") {
-      void logout().then(() => setError("This console is for MedNotice staff accounts only. You have been signed out."));
+      void logout().then(() => setError("This console is for departmental staff accounts only. You have been signed out."));
       return;
     }
     navigate(destination(), { replace: true });
@@ -48,7 +48,7 @@ export default function AdminLogin() {
       const next = await login(nextEmail, nextPassword);
       if (next.baseRole === "PATIENT") {
         await logout();
-        setError("This console is for MedNotice staff accounts only.");
+        setError("This console is for departmental staff accounts only.");
         return;
       }
       navigate(destination(), { replace: true });
@@ -93,7 +93,7 @@ export default function AdminLogin() {
       <main className="auth-main">
         <div className="auth-card fade-in">
           <h1>Staff sign in</h1>
-          <p>Use your MedNotice staff email address and password.</p>
+          <p>Use your departmental staff email address and password.</p>
 
           {error && <Alert tone="error">{error}</Alert>}
 
@@ -146,7 +146,7 @@ export default function AdminLogin() {
             ))}
           </div>
           <p className="tiny faint" style={{ marginTop: 12 }}>
-            Patients file and track grievances on the public MedNotice India application and never need this console.
+            Patients file and track grievances on the public grievance portal and never need this console.
           </p>
         </div>
       </main>

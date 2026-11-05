@@ -82,10 +82,10 @@ export default function Login() {
     <div className="auth-shell">
       <aside className="auth-aside">
         <Link to="/" className="brand" style={{ padding: 0 }}>
-          <span className="brand-mark">MN</span>
+          <img className="brand-emblem" src="/assam/emblem.svg" alt="" />
           <span>
-            <span className="brand-name">MedNotice</span>
-            <span className="brand-sub" style={{ display: "block" }}>India</span>
+            <span className="brand-name" style={{ display: "block" }}>Health &amp; Family Welfare</span>
+            <span className="brand-sub" style={{ display: "block" }}>Government of Assam</span>
           </span>
         </Link>
         <div style={{ maxWidth: 430 }}>

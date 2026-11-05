@@ -64,7 +64,7 @@ function buildNotice(caseRow: CaseRow, documents: DocumentRow[], adapterCode: st
     ...(triage.regulatoryBasis ?? jurisdiction?.frameworks ?? []).map((r) => `  • ${r}`),
     "",
     "Identifiers are masked in transit per the DPDP Act 2023 minimisation policy for outbound payloads.",
-    "Open the MedNotice India console to review the complete case record.",
+    "Open the staff console to review the complete case record.",
   ].join("\n");
   return {
     subject: `[${caseRow.priority}] ${caseRow.id} · ${caseRow.category} · ${caseRow.facility_name ?? caseRow.country}`,
@@ -150,7 +150,7 @@ export function patientWhatsAppTarget(caseRow: CaseRow): string | null {
 }
 
 function trackLink(): string {
-  return PUBLIC_URL ? `${PUBLIC_URL}/portal` : "your MedNotice patient workspace";
+  return PUBLIC_URL ? `${PUBLIC_URL}/portal` : "your patient workspace on this portal";
 }
 
 function buildWhatsAppBody(
@@ -160,7 +160,7 @@ function buildWhatsAppBody(
 ): { subject: string; body: string; params: string[] } {
   const facility = caseRow.facility_name ?? caseRow.region ?? "your facility";
   const priority = `${caseRow.priority} — ${PRIORITY_LABELS[caseRow.priority] ?? ""}`.trim();
-  const lines: string[] = ["MedNotice India"];
+  const lines: string[] = ["Health & Family Welfare Department, Government of Assam"];
 
   if (event === "CASE_SUBMITTED") {
     lines.push(
@@ -269,13 +269,13 @@ function writeEmailFile(row: NotificationRow): string {
   const safe = row.id.replace(/[^A-Za-z0-9_-]/g, "");
   const file = path.join(OUTBOX_DIR, `${safe}.eml`);
   const content = [
-    `From: MedNotice India <notifications@mednotice.in>`,
+    `From: Health & Family Welfare Department, Government of Assam <notifications@mednotice.in>`,
     `To: ${row.target}`,
     `Subject: ${row.subject}`,
     `Date: ${new Date().toUTCString()}`,
     `Message-ID: <${row.id}@mednotice.in>`,
-    `X-MedNotice-Case: ${row.case_id}`,
-    `X-MedNotice-Classification: RESTRICTED — masked identifiers only`,
+    `X-Health-Dept-Case: ${row.case_id}`,
+    `X-Health-Dept-Classification: RESTRICTED — masked identifiers only`,
     `Content-Type: text/plain; charset=utf-8`,
     "",
     row.body,
