@@ -52,6 +52,7 @@ export default function Home() {
   return (
     <>
       <section className={`hero${government ? " gov-hero" : ""}`}>
+        {government && <GovBanner />}
         <div className="hero-grid">
           <div className="fade-in">
             <span className="eyebrow">
@@ -229,6 +230,54 @@ export default function Home() {
       </section>
 
     </>
+  );
+}
+
+/** Rotating photographs of Assam health facilities shown behind the department hero. */
+const BANNERS = [
+  { src: "/assam/banner-gmch.jpg", caption: "Gauhati Medical College Hospital, Guwahati" },
+  { src: "/assam/banner-mmch.jpg", caption: "Mahendra Mohan Choudhury Hospital, Guwahati" },
+  { src: "/assam/banner-tezpur.jpg", caption: "Kanaklata Civil Hospital, Tezpur" },
+  { src: "/assam/banner-gate.jpg", caption: "GATE Hospital, Guwahati" },
+];
+
+const BANNER_INTERVAL_MS = 6000;
+
+function GovBanner() {
+  const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = window.setInterval(() => setActive((i) => (i + 1) % BANNERS.length), BANNER_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return (
+    <div className="gov-banner">
+      {BANNERS.map((banner, i) => (
+        <div
+          key={banner.src}
+          className={`gov-banner-slide${i === active ? " is-active" : ""}`}
+          style={{ backgroundImage: `url("${banner.src}")` }}
+          aria-hidden="true"
+        />
+      ))}
+      <div className="gov-banner-caption">
+        <span>{BANNERS[active].caption}</span>
+        <div className="gov-banner-dots">
+          {BANNERS.map((banner, i) => (
+            <button
+              key={banner.src}
+              type="button"
+              className={i === active ? "is-active" : undefined}
+              aria-label={`Show photo: ${banner.caption}`}
+              aria-current={i === active}
+              onClick={() => setActive(i)}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -900,16 +900,23 @@ portal palette applies to visitors on their next page load.
 
 `assam-health` is not a recolour of the default shell. For the patient portal it renders the structure Assam health
 portals use: a dark utility strip (`Government of Assam`, skip link, sign-in), a white masthead with the departmental
-crest and helpline, a navy navigation bar with a saffron active marker, a photographic banner, a notices-and-updates
+crest and helpline, a navy navigation bar with a saffron active marker, a rotating photographic banner, a notices-and-updates
 board and a navy footer with helplines and department address. That markup lives in `GovernmentHeader`,
 `GovernmentFooter` (`client/src/components/Layout.tsx`) and `NoticeBoard` (`client/src/pages/Home.tsx`), styled by the
 `.gov-*` rules in `client/src/styles.css`. The staff console keeps its sidebar, restyled navy with a government strip
 above the top bar.
 
 **Assets.** `client/public/assam/`: `emblem.svg` is a crest drawn for this project (not the official state seal) and
-`favicon.svg` is its small version, used as the tab icon for both the patient and console bundles. `hero-hospital.jpg`
-is a photograph of Assam Medical College & Hospital by Pranabnlp, Wikimedia Commons, CC BY-SA 4.0, used behind the
-patient hero banner. The credit also appears in the portal footer.
+`favicon.svg` is its small version, used as the tab icon for both the patient and console bundles. The patient hero
+rotates four photographs of Assam health facilities (`GovBanner` in `client/src/pages/Home.tsx`, six-second cross-fade,
+caption and dots to pick one, static under `prefers-reduced-motion`), all from Wikimedia Commons:
+
+| File | Facility | Author | Licence |
+| --- | --- | --- | --- |
+| `banner-gmch.jpg` | Gauhati Medical College Hospital | Baruah ranuj | CC0 |
+| `banner-mmch.jpg` | Mahendra Mohan Choudhury Hospital, Guwahati | ঈশান জ্যোতি বৰা | CC BY-SA 4.0 |
+| `banner-tezpur.jpg` | Kanaklata Civil Hospital, Tezpur | Nayan j Nath | CC BY-SA 4.0 |
+| `banner-gate.jpg` | GATE Hospital, Guwahati | GATEhospitalguwahati | CC BY-SA 4.0 |
 
 **How it is stored.** One row in the `settings` table (`key = 'theme'`, value `{"patient":"…","admin":"…"}`).
 Both processes share the SQLite file, so a palette choice survives restarts, deploys and the nightly stop/start,

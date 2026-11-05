@@ -1172,15 +1172,73 @@ pre.payload { background: var(--code-bg); border: 1px solid var(--line); border-
 /* ---------------------------------- banner ------------------------------- */
 
 :root[data-theme="assam-health"] .gov-hero {
+  position: relative;
+  overflow: hidden;
   max-width: none;
   margin: 0;
   padding: 0;
-  background:
-    linear-gradient(90deg, rgba(9, 28, 51, 0.94) 0%, rgba(9, 28, 51, 0.82) 44%, rgba(9, 28, 51, 0.42) 100%),
-    url("/assam/hero-hospital.jpg") center / cover no-repeat;
+  background: #0b2440;
   border-bottom: 4px solid #f58220;
 }
+:root[data-theme="assam-health"] .gov-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(9, 28, 51, 0.94) 0%, rgba(9, 28, 51, 0.82) 44%, rgba(9, 28, 51, 0.42) 100%);
+}
+
+/* Rotating photo banner behind the Assam hero. */
+:root[data-theme="assam-health"] .gov-banner { position: absolute; inset: 0; z-index: 0; background: #0b2440; }
+:root[data-theme="assam-health"] .gov-banner-slide {
+  position: absolute;
+  inset: 0;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 1.2s ease-in-out;
+}
+:root[data-theme="assam-health"] .gov-banner-slide.is-active { opacity: 1; }
+:root[data-theme="assam-health"] .gov-banner-caption {
+  position: absolute;
+  top: 12px;
+  right: 18px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  background: rgba(11, 36, 64, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #dfe8f4;
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+}
+:root[data-theme="assam-health"] .gov-banner-dots { display: flex; gap: 5px; }
+:root[data-theme="assam-health"] .gov-banner-dots button {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: transparent;
+  cursor: pointer;
+}
+:root[data-theme="assam-health"] .gov-banner-dots button:hover { border-color: #ffffff; }
+:root[data-theme="assam-health"] .gov-banner-dots button.is-active { background: #f58220; border-color: #f58220; }
+:root[data-theme="assam-health"] .gov-banner-dots button:focus-visible { outline: 2px solid #ffc46b; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="assam-health"] .gov-banner-slide { transition: none; }
+}
+@media (max-width: 720px) {
+  :root[data-theme="assam-health"] .gov-banner-caption { left: 12px; right: 12px; justify-content: space-between; font-size: 9.5px; }
+}
+
 :root[data-theme="assam-health"] .gov-hero .hero-grid {
+  position: relative;
+  z-index: 2;
   max-width: 1320px;
   margin: 0 auto;
   padding: 46px 28px 40px;
