@@ -108,7 +108,7 @@ export default function AdminCommunity() {
     <div className="fade-in">
       <div className="row-between" style={{ marginBottom: 18 }}>
         <div>
-          <h2>Community moderation</h2>
+          <h2>Community posts</h2>
           <p className="small muted" style={{ marginTop: 4 }}>
             Review posts and comments, correct personal identifiers, hide harmful threads or remove them entirely. Every action is audited.
           </p>

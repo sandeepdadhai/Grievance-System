@@ -160,7 +160,7 @@ export default function AdminCommunications() {
     <div className="fade-in">
       <div className="row-between" style={{ marginBottom: 18 }}>
         <div>
-          <h2>Communications</h2>
+          <h2>Message log</h2>
           <p className="small muted" style={{ marginTop: 4 }}>
             Every message exchanged with a health authority, in one audit-style log — with the hash-chained proof of each send.
           </p>

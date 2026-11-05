@@ -222,19 +222,19 @@ function GovernmentFooter() {
 }
 
 const NAV = [
-  { to: "/admin", label: "Overview", icon: "grid" as const, end: true, group: "Operations" as const },
-  { to: "/admin/cases", label: "Cases", icon: "folder" as const, group: "Operations" as const },
-  { to: "/admin/facility", label: "My facility", icon: "building" as const, group: "Operations" as const },
-  { to: "/admin/dispatch", label: "Dispatch", icon: "truck" as const, group: "Operations" as const },
-  { to: "/admin/delivery", label: "Delivery", icon: "send" as const, group: "Operations" as const },
-  { to: "/admin/communications", label: "Communications", icon: "mail" as const, group: "Operations" as const },
-  { to: "/admin/community", label: "Community", icon: "message" as const, group: "Operations" as const },
-  { to: "/admin/directory", label: "Directory", icon: "building" as const, group: "Governance" as const },
-  { to: "/admin/adapters", label: "Adapters", icon: "plug" as const, group: "Governance" as const },
-  { to: "/admin/audit", label: "Audit log", icon: "activity" as const, group: "Governance" as const },
-  { to: "/admin/users", label: "Users & roles", icon: "users" as const, group: "Governance" as const },
-  { to: "/admin/theme", label: "Appearance", icon: "palette" as const, group: "Governance" as const },
-  { to: "/admin/compliance", label: "Compliance", icon: "shield" as const, group: "Governance" as const },
+  { to: "/admin", label: "Dashboard", icon: "grid" as const, end: true, group: "Case work" as const },
+  { to: "/admin/cases", label: "Grievances", icon: "folder" as const, group: "Case work" as const },
+  { to: "/admin/facility", label: "My facility", icon: "building" as const, group: "Case work" as const },
+  { to: "/admin/dispatch", label: "Send to authorities", icon: "truck" as const, group: "Case work" as const },
+  { to: "/admin/delivery", label: "Notifications", icon: "send" as const, group: "Case work" as const },
+  { to: "/admin/communications", label: "Message log", icon: "mail" as const, group: "Case work" as const },
+  { to: "/admin/community", label: "Community posts", icon: "message" as const, group: "Case work" as const },
+  { to: "/admin/directory", label: "Hospitals & authorities", icon: "building" as const, group: "Administration" as const },
+  { to: "/admin/adapters", label: "Authority connections", icon: "plug" as const, group: "Administration" as const },
+  { to: "/admin/audit", label: "Audit trail", icon: "activity" as const, group: "Administration" as const },
+  { to: "/admin/users", label: "Staff accounts", icon: "users" as const, group: "Administration" as const },
+  { to: "/admin/theme", label: "Look & feel", icon: "palette" as const, group: "Administration" as const },
+  { to: "/admin/compliance", label: "Compliance", icon: "shield" as const, group: "Administration" as const },
 ];
 
 export function AdminLayout() {
@@ -261,8 +261,8 @@ export function AdminLayout() {
       <aside className="sidebar">
         <Brand />
         <div className="nav-group">
-          <div className="nav-label">Operations</div>
-          {nav.filter((item) => item.group === "Operations").map((item) => (
+          <div className="nav-label">Case work</div>
+          {nav.filter((item) => item.group === "Case work").map((item) => (
             <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
               <Icon name={item.icon} />
               <span>{item.label}</span>
@@ -270,8 +270,8 @@ export function AdminLayout() {
           ))}
         </div>
         <div className="nav-group">
-          <div className="nav-label">Governance</div>
-          {nav.filter((item) => item.group === "Governance").map((item) => (
+          <div className="nav-label">Administration</div>
+          {nav.filter((item) => item.group === "Administration").map((item) => (
             <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
               <Icon name={item.icon} />
               <span>{item.label}</span>

@@ -229,7 +229,7 @@ export default function AdminDirectory() {
     <div className="fade-in">
       <div className="row-between" style={{ marginBottom: 18 }}>
         <div>
-          <h2>Directory</h2>
+          <h2>Hospitals &amp; authorities</h2>
           <p className="small muted" style={{ marginTop: 4 }}>
             Health authorities and facilities offered to patients when they file a grievance. Active authorities and verified
             facilities appear in the intake form.

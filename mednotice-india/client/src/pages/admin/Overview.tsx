@@ -38,7 +38,7 @@ export default function AdminOverview() {
     <div className="fade-in">
       <div className="row-between" style={{ marginBottom: 18 }}>
         <div>
-          <h2>India overview</h2>
+          <h2>Dashboard</h2>
           <p className="small muted" style={{ marginTop: 4 }}>
             {data.scope === "INDIA" ? "All India" : "India only"} · refreshed {formatDate(data.generatedAt, { hour: "2-digit", minute: "2-digit" })}
           </p>

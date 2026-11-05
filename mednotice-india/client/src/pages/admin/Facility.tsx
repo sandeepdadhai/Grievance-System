@@ -125,7 +125,7 @@ export default function AdminFacility() {
         <Alert tone="warn">{error ?? "This account is not bound to a facility."}</Alert>
         <p className="small muted">
           {user?.baseRole === "SUPER_ADMIN"
-            ? "Assign a facility to a staff account under Users & roles to give it a facility queue."
+            ? "Assign a facility to a staff account under Staff accounts to give it a facility queue."
             : "Ask a super administrator to bind your account to the facility you work for."}
         </p>
         <Link to="/admin/cases" className="btn ghost">Open the case list</Link>

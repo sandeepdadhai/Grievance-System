@@ -139,7 +139,7 @@ export default function AdminAudit() {
     <div className="fade-in">
       <div className="row-between" style={{ marginBottom: 18 }}>
         <div>
-          <h2>Audit log</h2>
+          <h2>Audit trail</h2>
           <p className="small muted" style={{ marginTop: 4 }}>
             Every decision and every message the platform exchanged, in one append-only ledger.
           </p>

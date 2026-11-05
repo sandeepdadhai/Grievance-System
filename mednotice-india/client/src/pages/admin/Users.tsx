@@ -170,7 +170,7 @@ export default function AdminUsers() {
     <div className="fade-in">
       <div className="row-between" style={{ marginBottom: 18 }}>
         <div>
-          <h2>Users & roles</h2>
+          <h2>Staff accounts</h2>
           <p className="small muted" style={{ marginTop: 4 }}>Accounts, custom roles and capability bundles — all enforced server-side.</p>
         </div>
         <div className="row" style={{ gap: 8 }}>

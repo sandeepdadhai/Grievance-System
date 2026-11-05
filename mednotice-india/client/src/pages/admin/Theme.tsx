@@ -88,7 +88,7 @@ export default function AdminTheme() {
     <div className="fade-in">
       <div className="row-between" style={{ marginBottom: 18 }}>
         <div>
-          <h2>Appearance</h2>
+          <h2>Look &amp; feel</h2>
           <p className="small muted" style={{ marginTop: 6, maxWidth: 760 }}>
             Choose the palette for the patient portal and for this staff console independently. Palettes ship with the
             application, so a switch needs no rebuild or redeploy — visitors get it on their next page load.

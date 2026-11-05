@@ -69,7 +69,7 @@ export default function AdminDelivery() {
     <div className="fade-in">
       <div className="row-between" style={{ marginBottom: 18 }}>
         <div>
-          <h2>Delivery</h2>
+          <h2>Notifications</h2>
           <p className="small muted" style={{ marginTop: 4 }}>Priority-aware notifications with retry/backoff and signed webhooks.</p>
         </div>
         <div className="row" style={{ gap: 8 }}>

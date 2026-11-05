@@ -60,7 +60,7 @@ export default function AdminCases() {
     <div className="fade-in">
       <div className="row-between" style={{ marginBottom: 18 }}>
         <div>
-          <h2>Case queue</h2>
+          <h2>Grievance queue</h2>
           <p className="small muted" style={{ marginTop: 4 }}>
             {data ? `${data.total} matching case(s)` : "Loading…"} · jurisdiction scoping applied automatically
           </p>

@@ -232,7 +232,7 @@ export default function AdminDispatch() {
     <div className="fade-in">
       <div className="row-between" style={{ marginBottom: 18 }}>
         <div>
-          <h2>Dispatch</h2>
+          <h2>Send to authorities</h2>
           <p className="small muted" style={{ marginTop: 4 }}>
             Cron delivery of case bundles to each health authority, with automatic status pull-back from the department.
           </p>

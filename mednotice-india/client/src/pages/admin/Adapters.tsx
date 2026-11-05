@@ -96,7 +96,7 @@ export default function AdminAdapters() {
     <div className="fade-in">
       <div className="row-between" style={{ marginBottom: 18 }}>
         <div>
-          <h2>Integration adapters</h2>
+          <h2>Authority connections</h2>
           <p className="small muted" style={{ marginTop: 4 }}>
             Adding a jurisdiction is a configuration change: pick a protocol, endpoint and schema mapping.
           </p>
