@@ -11,18 +11,27 @@ console (EC2 → Elastic IPs → Associate).
 
 The MedNotice Global instance (`i-085640db7a6f9ead8`) was **terminated on
 2026-10-28**; its code stays in the repository but nothing is deployed for it.
-Only this instance remains, so the free tier has room for a 12-hour day.
+Only this instance remains, so it fits the 750 h/month EC2 free tier while
+running continuously.
 
-## Power schedule (11:00 → 23:00 Hong Kong time)
+## Power policy (always on)
 
-The instance stops itself every night and is started again each morning, so it
-runs roughly 365 h a month and stays inside the 750 h free tier.
+The instance **runs 24/7** — there is no nightly shutdown since 2026-11-06. The
+earlier 11:00 → 23:00 Hong Kong window left the site unreachable for 12 h a day
+and depended on a GitHub cron that routinely fired late (on 2026-11-06 the start
+ran at 12:31 HKT, 1.5 h after the site was expected back), and every stop/start
+risked a new public address.
 
 | What | Where | When |
 | --- | --- | --- |
-| Start | `.github/workflows/ec2-schedule.yml` (`aws ec2 start-instances`) | `0 3 * * *` UTC = 11:00 HKT |
-| Stop | same workflow (`aws ec2 stop-instances`) | `0 15 * * *` UTC = 23:00 HKT |
-| Stop backstop | `/etc/cron.d/mednotice-shutdown` on the instance | 23:05 HKT, in case the workflow fails |
+| Keep-alive check | `.github/workflows/ec2-schedule.yml` (`aws ec2 start-instances` when not running) | every 30 min, plus health check |
+| Manual stop | same workflow → *Run workflow* → `stop` | only when you deliberately want it off |
+
+Cost: one `t3.micro` for 730 h/month is inside the 750 h free tier, and a single
+public IPv4 is covered by the same free allowance (750 h/month) for the first 12
+months, so continuous running adds nothing over the old 12-hour day. Remember
+that a *stopped* instance still bills its address, so stopping saves almost
+nothing while breaking the demo URL.
 
 This account's credentials **cannot** create AWS-native schedules:
 `scheduler:*`, `events:PutRule`, `lambda:*`, `autoscaling:*` and `iam:PassRole`
@@ -32,7 +41,7 @@ and variables → Actions*: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`. Unt
 they exist the scheduled job exits without doing anything and the instance stays
 asleep after its nightly stop.
 
-Start it by hand at any time:
+Start it by hand at any time (it should already be running):
 
 ```bash
 aws ec2 start-instances --region ap-southeast-2 --instance-ids i-07f6a58b57ebf1fb4
@@ -77,9 +86,11 @@ npm run deploy                 # rebuilds both bundles with the new console URL
 adding a second one, so it is the same single address the instance already has:
 the EC2 free tier covers 750 h/month of public IPv4 for the first 12 months, and
 after that it is ~US$0.005/h (~US$3.65/month) — identical to the dynamic address,
-not an extra charge. The instance runs ~365 h/month; the stopped hours still
-count against the 750 h because the address stays attached, so the monthly total
-is ~730 h and fits.
+not an extra charge, because the instance only ever holds one public address.
+The instance now runs continuously, so that is ~730 h/month and fits exactly
+inside the 750 h free allowance. On the credit-based free tier (accounts created
+from 2025-07-15) the same ~US$3.65/month is paid from the credit balance rather
+than being free — check *Billing → Free Tier* before assuming zero cost.
 
 **Permissions.** This account's IAM user previously had `ec2:AllocateAddress`
 denied, which is why the first deployment had none. `iam-policy.json` in this

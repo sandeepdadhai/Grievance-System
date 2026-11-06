@@ -3,9 +3,13 @@ import path from "node:path";
 import { DATA_DIR } from "./config.js";
 
 export const db = new DatabaseSync(path.join(DATA_DIR, "mednotice.sqlite"));
+// busy_timeout must be set before journal_mode: switching to WAL takes a write
+// lock, and on a cold boot both services open this file at the same moment, so
+// without a timeout the first statement fails with SQLITE_BUSY and systemd
+// restarts the app (seen on the 2026-11-06 boot).
+db.exec("PRAGMA busy_timeout = 5000;");
 db.exec("PRAGMA journal_mode = WAL;");
 db.exec("PRAGMA foreign_keys = ON;");
-db.exec("PRAGMA busy_timeout = 5000;");
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
