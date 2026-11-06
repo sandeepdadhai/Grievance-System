@@ -34,7 +34,7 @@ APP_SUBDIR="${APP_SUBDIR:-mednotice-india}"
 DATA_DIR_REMOTE="${DATA_DIR_REMOTE:-/var/lib/mednotice}"
 
 # How it is exposed
-PUBLIC_URL="${PUBLIC_URL:-http://$SSH_HOST}"   # patient origin, no port (Caddy listens on 80)
+PUBLIC_URL="${PUBLIC_URL:-http://$SSH_HOST}"   # patient origin, no port (Caddy serves :80 and, with a Let's Encrypt IP certificate, :443)
 PATIENT_PORT="${PATIENT_PORT:-4102}"           # patient Node process, behind Caddy
 ADMIN_PORT="${ADMIN_PORT:-4100}"               # staff console origin — open this port in the firewall
 ADMIN_BIND="${ADMIN_BIND:-0.0.0.0}"            # use 127.0.0.1 to keep the console private to the box
@@ -178,9 +178,29 @@ RestartSec=5
 WantedBy=multi-user.target
 UNIT
 
-echo "[remote] writing the Caddy reverse proxy (:80 -> 127.0.0.1:$PATIENT_PORT)"
+echo "[remote] writing the Caddy reverse proxy (:80 plain, :443 TLS -> 127.0.0.1:$PATIENT_PORT)"
 sudo tee /etc/caddy/Caddyfile >/dev/null <<CADDY
-:80 {
+{
+	default_sni $SSH_HOST
+}
+
+# Plain HTTP stays available: this demo has no domain, and some clients only
+# ever request http://.
+http://$SSH_HOST {
+	reverse_proxy 127.0.0.1:$PATIENT_PORT
+}
+
+# Publicly trusted certificate for the bare IP. Let's Encrypt only issues IP
+# certificates under the short-lived (6 day) profile, HTTP-01 only, and TLS
+# clients send no SNI to an IP, hence default_sni above. Caddy renews it on its
+# own; nothing is stored in the repository.
+https://$SSH_HOST {
+	tls {
+		issuer acme {
+			profile shortlived
+			disable_tlsalpn_challenge
+		}
+	}
 	reverse_proxy 127.0.0.1:$PATIENT_PORT
 }
 CADDY
@@ -214,10 +234,16 @@ if [ "$VERIFY" = "1" ]; then
   console_auth=$(curl -s -u "$ADMIN_BASIC_USER:$CONSOLE_PW" -o /dev/null -w '%{http_code}' -m 25 \
     "http://$SSH_HOST:$ADMIN_PORT/admin" 2>/dev/null || true)
 
+  patient_tls=$(curl -s -o /dev/null -w '%{http_code}' -m 25 "https://$SSH_HOST/" 2>/dev/null || true)
+
   printf '%-12s %-42s %s\n' "patient" "$PUBLIC_URL/" "${patient_code:-000}"
+  printf '%-12s %-42s %s\n' "patient-TLS" "https://$SSH_HOST/" "${patient_tls:-000}"
   printf '%-12s %-42s %s\n' "console" "http://$SSH_HOST:$ADMIN_PORT/admin" "${console_code:-000} (with credentials: ${console_auth:-000})"
 
   [ "$patient_code" = "200" ] || warn "the patient app did not answer 200 — check: ssh $SSH_USER@$SSH_HOST 'journalctl -u mednotice -n 50'"
+  if [ "$patient_tls" != "200" ]; then
+    warn "https did not answer 200 — check the certificate: ssh $SSH_USER@$SSH_HOST 'journalctl -u caddy -n 50'"
+  fi
   if [ "$console_code" = "000" ] || [ "$console_auth" = "000" ]; then
     warn "the console port $ADMIN_PORT is not reachable from the internet."
     warn "the app is running; open TCP $ADMIN_PORT in the firewall/security group, then reload the URL."
@@ -232,6 +258,7 @@ cat <<SUMMARY
   Deployed $( "${SSH[@]}" "sudo git -C '$REMOTE_REPO' log -1 --pretty=%h" )
 
   Patient app    ${PUBLIC_URL}/
+                 https://${SSH_HOST}/   (Let's Encrypt IP certificate)
   Staff console  http://${SSH_HOST}:${ADMIN_PORT}/admin
 
   Console gate   user: ${ADMIN_BASIC_USER}

@@ -52,6 +52,28 @@ aws ec2 describe-instances --region ap-southeast-2 --instance-ids i-07f6a58b57eb
 `PUBLIC_URL` in `/etc/mednotice.env` must match, which is exactly what the
 Elastic IP below is for.
 
+## HTTPS without a domain (since 2026-11-06)
+
+Caddy serves the IP on **both** `http://54.79.127.229/` and
+`https://54.79.127.229/`. Port 443 was open in the security group all along but
+nothing listened there, so anyone opening an `https://` link got
+*connection refused* — the usual "the site is down" experience while plain HTTP
+was fine.
+
+The certificate is a real Let's Encrypt **IP address certificate**, which needs
+no DNS: Caddy 2.10.1+ requests it under the mandatory `shortlived` profile
+(160 h, ~6 days, HTTP-01 only) and renews it automatically. Two details matter:
+
+* `default_sni <ip>` in the Caddyfile global block — TLS clients send no SNI to
+  an IP, so without it Caddy cannot match the site block.
+* `disable_tlsalpn_challenge`, because Let's Encrypt validates IP identifiers
+  with HTTP-01 only.
+
+Consequences: the certificate is tied to that exact IPv4. If the instance is
+stopped and restarted with a **different** address, Caddy cannot renew and HTTPS
+breaks until `SSH_HOST`/`PUBLIC_URL` in `scripts/deploy.sh` are updated and
+redeployed. Plain HTTP keeps working regardless.
+
 ## Elastic IP (static address)
 
 **Not attached since the 2026-11-05 rebuild.** The previous address
@@ -81,6 +103,14 @@ PUBLIC_URL="http://<the address>"
 ```bash
 npm run deploy                 # rebuilds both bundles with the new console URL
 ```
+
+**Not created on 2026-11-06 either:** `ec2:AllocateAddress`,
+`ec2:DescribeAddresses` and `ec2:AssociateAddress` are denied for `samagent`
+**and** for the instance role `mednotice-ssm-role` (verified with `--dry-run` and
+via IMDS credentials). Nothing was allocated, so no Elastic IP can be billing.
+Grant those five actions from `iam-policy.json` (or attach one in the console)
+and re-run `elastic-ip.sh`. That is also the only way to make the address — and
+therefore the HTTPS certificate — survive a stop/start.
 
 **Free tier.** An Elastic IP *replaces* the auto-assigned public IPv4 instead of
 adding a second one, so it is the same single address the instance already has:
