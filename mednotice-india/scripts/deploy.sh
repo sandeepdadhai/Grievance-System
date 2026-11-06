@@ -198,7 +198,13 @@ sudo tee /etc/caddy/Caddyfile >/dev/null <<CADDY
 # Plain HTTP stays available: this demo has no domain, and some clients only
 # ever request http://.
 http://$SSH_HOST {
-	reverse_proxy 127.0.0.1:$PATIENT_PORT
+	handle /demo/* {
+		root * /srv/mednotice/public
+		file_server browse
+	}
+	handle {
+		reverse_proxy 127.0.0.1:$PATIENT_PORT
+	}
 }
 
 # Publicly trusted certificate for the bare IP. Let's Encrypt only issues IP
@@ -212,9 +218,18 @@ https://$SSH_HOST {
 			disable_tlsalpn_challenge
 		}
 	}
-	reverse_proxy 127.0.0.1:$PATIENT_PORT
+	# Demonstration downloads (screencasts, exports) live outside the app.
+	handle /demo/* {
+		root * /srv/mednotice/public
+		file_server browse
+	}
+	handle {
+		reverse_proxy 127.0.0.1:$PATIENT_PORT
+	}
 }
 CADDY
+sudo mkdir -p /srv/mednotice/public/demo
+sudo chmod 755 /srv/mednotice/public /srv/mednotice/public/demo
 sudo caddy validate --config /etc/caddy/Caddyfile >/tmp/deploy-caddy.log 2>&1 || { cat /tmp/deploy-caddy.log; exit 1; }
 
 echo "[remote] restarting services"
