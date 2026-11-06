@@ -1,11 +1,10 @@
-import fs from "node:fs";
-import path from "node:path";
 import crypto from "node:crypto";
 import { all, get, nowIso, run } from "./db.js";
 import { audit } from "./audit.js";
 import { findJurisdiction } from "./config.js";
 import { findAuthority } from "./registry.js";
-import { MASTER_KEY, OUTBOX_DIR, PRIORITY_LABELS, PUBLIC_URL } from "./config.js";
+import { EMAIL_ADMIN_RECIPIENTS, MASTER_KEY, PRIORITY_LABELS, PUBLIC_URL } from "./config.js";
+import { sendEmail } from "./email.js";
 import { decryptField, maskEmail, maskName, maskText, randomCode } from "./crypto.js";
 import { maskWhatsAppNumber, normalizeWhatsAppNumber, sendWhatsAppMessage, whatsappStatus } from "./whatsapp.js";
 import type { CaseRow, DocumentRow, UserRow } from "./models.js";
@@ -74,6 +73,22 @@ function buildNotice(caseRow: CaseRow, documents: DocumentRow[], adapterCode: st
   };
 }
 
+/**
+ * Department mailboxes that get a copy of every case email: the configured
+ * administrators first, then any extra addresses, with duplicates removed.
+ */
+function emailRecipients(extra: Array<string | null | undefined> = []): string[] {
+  const seen = new Set<string>();
+  for (const value of [...extra, ...EMAIL_ADMIN_RECIPIENTS]) {
+    const address = (value ?? "").trim();
+    if (!address || !address.includes("@")) continue;
+    const key = address.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+  }
+  return [...seen];
+}
+
 /** Enqueue email + webhook notifications for a successfully routed case. */
 export function queueCaseNotifications(
   caseRow: CaseRow,
@@ -84,11 +99,11 @@ export function queueCaseNotifications(
   const now = nowIso();
   const targets: Array<{ channel: "EMAIL" | "WEBHOOK"; target: string }> = [];
   if (authority) {
-    targets.push({ channel: "EMAIL", target: authority.authority.contactEmail });
     targets.push({ channel: "WEBHOOK", target: authority.authority.webhook });
   }
-  if (caseRow.priority === "P1") {
-    targets.push({ channel: "EMAIL", target: "duty-officer@mednotice.in" });
+  // The owning authority and every department mailbox hear about the routing.
+  for (const address of emailRecipients([authority?.authority.contactEmail])) {
+    targets.push({ channel: "EMAIL", target: address });
   }
 
   let queued = 0;
@@ -113,6 +128,115 @@ export function queueCaseNotifications(
       entityType: "case",
       entityId: caseRow.id,
       details: { notificationId: id, channel: t.channel, target: t.target, transmissionId: meta.transmissionId },
+    });
+  }
+  return queued;
+}
+
+/* --------------------------------- Email --------------------------------- */
+
+/**
+ * Email notifications for the two events that matter outside the console:
+ * a grievance has been filed, and its status has changed.
+ *
+ * The body carries no patient identifiers — only the case reference, facility,
+ * category, priority and status — so the department and the authority can act
+ * without the message itself being a personal-data record (DPDP Act 2023).
+ */
+export type CaseEmailEvent = "CASE_SUBMITTED" | "CASE_STATUS_CHANGED";
+
+function buildCaseEmail(
+  caseRow: CaseRow,
+  event: CaseEmailEvent,
+  extra: { previousStatus?: string; outcome?: string | null; note?: string | null },
+): { subject: string; body: string } {
+  const authority = findAuthority(caseRow.authority_id);
+  const facility = caseRow.facility_name ?? caseRow.region ?? "not specified";
+  const lines: string[] = [
+    "Health & Family Welfare Department, Government of Assam",
+    "Patient grievance redressal — automated notification",
+    "",
+  ];
+
+  if (event === "CASE_SUBMITTED") {
+    lines.push(
+      "A new grievance has been filed and is ready for action.",
+      "",
+      `Case:          ${caseRow.id}`,
+      `Facility:      ${facility}`,
+      `Authority:     ${authority?.authority.name ?? caseRow.authority_id}`,
+      `Category:      ${caseRow.category}`,
+      `Priority:      ${caseRow.priority} — ${PRIORITY_LABELS[caseRow.priority] ?? ""}`.trim(),
+      `Status:        ${humanStatus(caseRow.status)}`,
+      `Response due:  ${caseRow.sla_due_at}`,
+    );
+  } else {
+    lines.push(
+      "A grievance has changed status.",
+      "",
+      `Case:          ${caseRow.id}`,
+      `Facility:      ${facility}`,
+      `Authority:     ${authority?.authority.name ?? caseRow.authority_id}`,
+      `New status:    ${humanStatus(caseRow.status)}`,
+      `Previous:      ${humanStatus(extra.previousStatus ?? "")}`,
+      `Priority:      ${caseRow.priority}`,
+      `Response due:  ${caseRow.sla_due_at}`,
+    );
+    if (extra.outcome) lines.push(`Outcome:       ${extra.outcome.slice(0, 300)}`);
+  }
+
+  if (extra.note) lines.push(`Note:          ${extra.note.slice(0, 300)}`);
+
+  lines.push(
+    "",
+    "Complainant details are held in the case record and are not included in this message.",
+    `Open the case in the staff console: ${PUBLIC_URL ? `${PUBLIC_URL}/` : "the department console"}`,
+  );
+
+  const subject =
+    event === "CASE_SUBMITTED"
+      ? `[${caseRow.priority}] New grievance ${caseRow.id} · ${caseRow.category} · ${facility}`
+      : `[${humanStatus(caseRow.status)}] ${caseRow.id} · ${caseRow.category} · ${facility}`;
+
+  return { subject: subject.slice(0, 200), body: lines.join("\n") };
+}
+
+/**
+ * Queue the department + authority email for a case event.
+ * Returns the number of messages queued (one per recipient).
+ */
+export function queueCaseEmailNotice(
+  caseRow: CaseRow,
+  event: CaseEmailEvent,
+  extra: { previousStatus?: string; outcome?: string | null; note?: string | null } = {},
+): number {
+  const authority = findAuthority(caseRow.authority_id);
+  const recipients = emailRecipients([authority?.authority.contactEmail]);
+  if (!recipients.length) return 0;
+
+  const { subject, body } = buildCaseEmail(caseRow, event, extra);
+  const now = nowIso();
+  let queued = 0;
+  for (const target of recipients) {
+    const id = `NTF-${randomCode(10)}`;
+    run(
+      `INSERT INTO notifications (id, case_id, channel, target, subject, body, status, attempts, next_attempt_at, created_at)
+       VALUES (?, ?, 'EMAIL', ?, ?, ?, 'QUEUED', 0, ?, ?)`,
+      id,
+      caseRow.id,
+      target,
+      subject,
+      body,
+      now,
+      now,
+    );
+    queued += 1;
+    audit({
+      actor: { id: null, role: "SYSTEM" },
+      action: "NOTIFICATION_QUEUED",
+      entityType: "case",
+      entityId: caseRow.id,
+      details: { notificationId: id, channel: "EMAIL", event, target },
     });
   }
   return queued;
@@ -255,33 +379,23 @@ export function queueWhatsAppNotice(
   return id;
 }
 
-/** Queue the "status changed" message, skipping no-op transitions. */
+/**
+ * Queue the "status changed" message, skipping no-op transitions. The patient
+ * is reached on WhatsApp when they opted in; the owning authority and the
+ * department always get the email.
+ */
 export function notifyCaseStatusChange(
   caseRow: CaseRow,
   previousStatus: string,
-  extra: { outcome?: string | null } = {},
+  extra: { outcome?: string | null; note?: string | null } = {},
 ): string | null {
   if (previousStatus === caseRow.status) return null;
+  queueCaseEmailNotice(caseRow, "CASE_STATUS_CHANGED", {
+    previousStatus,
+    outcome: extra.outcome ?? null,
+    note: extra.note ?? null,
+  });
   return queueWhatsAppNotice(caseRow, "CASE_STATUS_CHANGED", { previousStatus, outcome: extra.outcome ?? null });
-}
-
-function writeEmailFile(row: NotificationRow): string {
-  const safe = row.id.replace(/[^A-Za-z0-9_-]/g, "");
-  const file = path.join(OUTBOX_DIR, `${safe}.eml`);
-  const content = [
-    `From: Health & Family Welfare Department, Government of Assam <notifications@mednotice.in>`,
-    `To: ${row.target}`,
-    `Subject: ${row.subject}`,
-    `Date: ${new Date().toUTCString()}`,
-    `Message-ID: <${row.id}@mednotice.in>`,
-    `X-Health-Dept-Case: ${row.case_id}`,
-    `X-Health-Dept-Classification: RESTRICTED — masked identifiers only`,
-    `Content-Type: text/plain; charset=utf-8`,
-    "",
-    row.body,
-  ].join("\r\n");
-  fs.writeFileSync(file, content, { mode: 0o600 });
-  return file;
 }
 
 async function deliverWebhook(row: NotificationRow, body: string): Promise<void> {
@@ -318,7 +432,13 @@ async function deliverWebhook(row: NotificationRow, body: string): Promise<void>
 
 async function sendOne(row: NotificationRow): Promise<void> {
   if (row.channel === "EMAIL") {
-    writeEmailFile(row);
+    const result = await sendEmail({ to: row.target, subject: row.subject, text: row.body, kind: "CASE_NOTIFICATION" });
+    // A provider rejection is retried by the queue; in simulation the payload
+    // lands in $DATA_DIR/outbox and the reference is the outbox file name.
+    if (result.error) throw new Error(result.error);
+    if (result.reference) {
+      run("UPDATE notifications SET provider_ref = ? WHERE id = ?", `${result.provider}:${result.reference}`, row.id);
+    }
     return;
   }
   if (row.channel === "WHATSAPP") {

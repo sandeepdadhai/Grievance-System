@@ -106,7 +106,18 @@ grep -E "dist/(patient|admin)/.*\.(html|js)" /tmp/deploy-build.log | tail -4
 
 # ---------------------------------------------------------------- config
 echo "[remote] writing /etc/mednotice.env"
-MANAGED='^(NODE_ENV|DATA_DIR|PORT|ADMIN_HOST|ADMIN_PORT|ADMIN_BASIC_USER|ADMIN_BASIC_PASSWORD|ADMIN_ALLOWED_IPS|PUBLIC_URL)='
+# Email settings are written only when the caller passes them, so an ordinary
+# redeploy never clears a mailbox configuration that already lives on the server.
+EMAIL_BLOCK=""
+EMAIL_MANAGED=""
+for name in EMAIL_ENABLED EMAIL_API_URL EMAIL_API_KEY EMAIL_FROM EMAIL_ADMIN_RECIPIENTS EMAIL_SIMULATE; do
+  value="${!name:-}"
+  [ -n "$value" ] || continue
+  EMAIL_BLOCK="${EMAIL_BLOCK}${name}=${value}"$'\n'
+  EMAIL_MANAGED="${EMAIL_MANAGED}|${name}"
+done
+
+MANAGED="^(NODE_ENV|DATA_DIR|PORT|ADMIN_HOST|ADMIN_PORT|ADMIN_BASIC_USER|ADMIN_BASIC_PASSWORD|ADMIN_ALLOWED_IPS|PUBLIC_URL${EMAIL_MANAGED})="
 KEEP=""
 EXISTING_PW=""
 if sudo test -f /etc/mednotice.env; then
@@ -131,7 +142,7 @@ ADMIN_BASIC_USER=$ADMIN_BASIC_USER
 ADMIN_BASIC_PASSWORD=$PW
 ADMIN_ALLOWED_IPS=$ADMIN_ALLOWED_IPS
 PUBLIC_URL=$PUBLIC_URL
-
+$EMAIL_BLOCK
 # Everything below was preserved from the previous deployment.
 $KEEP
 ENV

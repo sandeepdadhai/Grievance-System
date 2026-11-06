@@ -110,6 +110,16 @@ export const EMAIL_API_URL = process.env.EMAIL_API_URL ?? "";
 export const EMAIL_API_KEY = process.env.EMAIL_API_KEY ?? "";
 export const EMAIL_FROM = process.env.EMAIL_FROM ?? "Health & Family Welfare Department, Government of Assam <no-reply@mednotice.in>";
 export const EMAIL_SIMULATE = process.env.EMAIL_SIMULATE === "1";
+/**
+ * Department mailboxes that receive a copy of every case notification, in
+ * addition to the authority that owns the case. Comma-separated; the
+ * super-admin and auditor accounts from the seed data are the defaults so a
+ * fresh deployment still delivers somewhere real once credentials are set.
+ */
+export const EMAIL_ADMIN_RECIPIENTS = (process.env.EMAIL_ADMIN_RECIPIENTS ?? "admin@mednotice.in,auditor@mednotice.in")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
 /** One-time password lifetime in seconds. */
 export const OTP_TTL_SECONDS = Math.max(60, Number(process.env.OTP_TTL_SECONDS ?? 300));
 /** Wrong-code attempts allowed before a challenge is burnt. */
