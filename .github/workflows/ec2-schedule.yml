@@ -1,11 +1,15 @@
-name: MedNotice India EC2 power schedule
+name: MedNotice India EC2 keep-alive
 
-# Starts the MedNotice India instance at 11:00 and stops it at 23:00 Hong Kong
-# time (UTC+8), so it runs ~12 h a day and stays inside the EC2 free tier.
+# The demo instance stays up around the clock. 730 h in a month still fits the
+# 750 h/month EC2 free tier for a single t3.micro, and the address only changes
+# on a stop/start, so continuous running is both free and the only way the
+# http://54.79.127.229/ links keep working.
 #
-# GitHub Actions cron is always UTC, so:
-#   03:00 UTC = 11:00 HKT  -> start
-#   15:00 UTC = 23:00 HKT  -> stop
+# This workflow is the safety net: every 30 minutes it checks the instance state
+# and starts it if it somehow stopped (failed nightly job, manual stop, AWS
+# maintenance). GitHub cron is always UTC and can run late, which is why it no
+# longer carries the normal day/night switching — a late start used to mean the
+# site was unreachable for an hour or more.
 #
 # The AWS credentials for this account cannot create EventBridge schedules
 # (scheduler:*, events:*, iam:PassRole are all denied), so this workflow is the
@@ -14,14 +18,10 @@ name: MedNotice India EC2 power schedule
 #   AWS_ACCESS_KEY_ID
 #   AWS_SECRET_ACCESS_KEY
 # The scheduled job is a no-op until they exist (see the guard step).
-#
-# The instance also stops itself from cron at 23:05 HKT as a backstop, so a
-# failed stop can never leave it running overnight.
 
 on:
   schedule:
-    - cron: "0 3 * * *"   # 11:00 Asia/Hong_Kong — start
-    - cron: "0 15 * * *"  # 23:00 Asia/Hong_Kong — stop
+    - cron: "*/30 * * * *"   # every 30 minutes
   workflow_dispatch:
     inputs:
       action:
@@ -44,10 +44,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "action=${{ inputs.action }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event.schedule }}" = "0 3 * * *" ]; then
-            echo "action=start" >> "$GITHUB_OUTPUT"
           else
-            echo "action=stop" >> "$GITHUB_OUTPUT"
+            echo "action=start" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Skip when the AWS secrets are missing
@@ -85,10 +83,26 @@ jobs:
             aws ec2 stop-instances --instance-ids "$INSTANCE_ID"
           fi
 
-      - name: Report the public address after a start
+      - name: Report the public address and health
         if: steps.guard.outputs.ready == 'true' && steps.decide.outputs.action == 'start'
         run: |
+          set -euo pipefail
           aws ec2 wait instance-running --instance-ids "$INSTANCE_ID"
           IP=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
             --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
           echo "MedNotice India is up at http://$IP/" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$IP" != "54.79.127.229" ]; then
+            {
+              echo ""
+              echo "⚠️ The public address changed to \`$IP\`. Update \`SSH_HOST\`/\`PUBLIC_URL\`"
+              echo "in \`scripts/deploy.sh\` and redeploy, or attach a static Elastic IP."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          for i in $(seq 1 20); do
+            if curl -fsS -m 5 "http://$IP/api/health" > /dev/null; then
+              echo "Health check OK after $((i * 10))s." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Health check did not pass; the app may still be booting." >> "$GITHUB_STEP_SUMMARY"
