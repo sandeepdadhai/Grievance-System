@@ -17,6 +17,7 @@
  * Run on the server:  npx tsx scripts/seed-assam-demo.ts
  */
 import { all, get, nowIso, run } from "../server/db.js";
+import { audit } from "../server/audit.js";
 import { encryptField, hashToken, maskEmail, maskName, randomCode } from "../server/crypto.js";
 import { triage } from "../server/triage.js";
 
@@ -193,25 +194,34 @@ const CASES: CaseSeed[] = [
   },
 ];
 
+function deleteCaseRow(id: string): void {
+  run("DELETE FROM documents WHERE case_id = ?", id);
+  run("DELETE FROM notifications WHERE case_id = ?", id);
+  run("DELETE FROM transmissions WHERE case_id = ?", id);
+  run("DELETE FROM case_reviews WHERE case_id = ?", id);
+  try {
+    run("DELETE FROM case_status_syncs WHERE case_id = ?", id);
+  } catch {
+    /* table absent on older schemas */
+  }
+  try {
+    run("DELETE FROM webhook_events WHERE source = ?", `mednotice:${id}`);
+  } catch {
+    /* ignore */
+  }
+  run("DELETE FROM cases WHERE id = ?", id);
+}
+
+/** Idempotent reset: drop the previously seeded Assam rows before re-seeding. */
+function purgeAssamCases(): number {
+  const victims = all<{ id: string }>("SELECT id FROM cases WHERE authority_id = ?", ASSAM);
+  for (const { id } of victims) deleteCaseRow(id);
+  return victims.length;
+}
+
 function purgeNonAssamCases(): number {
   const victims = all<{ id: string }>("SELECT id FROM cases WHERE authority_id != ?", ASSAM);
-  for (const { id } of victims) {
-    run("DELETE FROM documents WHERE case_id = ?", id);
-    run("DELETE FROM notifications WHERE case_id = ?", id);
-    run("DELETE FROM transmissions WHERE case_id = ?", id);
-    run("DELETE FROM case_reviews WHERE case_id = ?", id);
-    try {
-      run("DELETE FROM case_status_syncs WHERE case_id = ?", id);
-    } catch {
-      /* table absent on older schemas */
-    }
-    try {
-      run("DELETE FROM webhook_events WHERE source = ?", `mednotice:${id}`);
-    } catch {
-      /* ignore */
-    }
-    run("DELETE FROM cases WHERE id = ?", id);
-  }
+  for (const { id } of victims) deleteCaseRow(id);
   return victims.length;
 }
 
@@ -284,13 +294,15 @@ function seedCases(): string[] {
       resolved ? "RESOLVED" : "UNDER_REVIEW",
       new Date(Date.now() - 2 * 3_600_000).toISOString(),
     );
-    run(
-      `INSERT INTO audit_log (ts, actor_id, actor_role, action, entity_type, entity_id, details_json)
-       VALUES (?, NULL, 'SYSTEM', 'CASE_IMPORTED', 'case', ?, ?)`,
-      createdAt,
-      id,
-      JSON.stringify({ source: "assam-demo-seed", priority: t.priority, status: seed.status }),
-    );
+    // Seeded rows still go through the hash-chained audit writer, so the chain
+    // stays valid and the console's audit view shows where the data came from.
+    audit({
+      actor: { id: null, role: "SYSTEM" },
+      action: "CASE_IMPORTED",
+      entityType: "case",
+      entityId: id,
+      details: { source: "assam-demo-seed", priority: t.priority, status: seed.status, facility: facilityName },
+    });
     created.push(id);
     // The access code is written to the console only so the presenter can track
     // a guest-style case during the walk-through; it is never stored in clear.
@@ -364,8 +376,11 @@ run(
   ASSAM,
 );
 
-const removed = purgeNonAssamCases();
+const othersremoved = purgeNonAssamCases();
+const reset = purgeAssamCases();
 const seeded = seedCases();
 seedCommunity();
 const total = get<{ n: number }>("SELECT COUNT(*) AS n FROM cases WHERE authority_id = ?", ASSAM)?.n ?? 0;
-console.log(`\nremoved ${removed} non-Assam case(s); seeded ${seeded.length} Assam case(s); Assam cases now ${total}`);
+console.log(
+  `\nremoved ${othersremoved} non-Assam case(s); reset ${reset} Assam case(s); seeded ${seeded.length}; Assam cases now ${total}`,
+);
