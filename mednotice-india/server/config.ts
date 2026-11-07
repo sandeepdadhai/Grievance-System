@@ -120,6 +120,14 @@ export const EMAIL_ADMIN_RECIPIENTS = (process.env.EMAIL_ADMIN_RECIPIENTS ?? "ad
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
+/**
+ * Demonstration redirect. When set, every outbound email — authority notices,
+ * department copies and patient one-time passwords — is delivered to this one
+ * test mailbox instead of the real recipient. The original addressee is kept in
+ * the subject and the first line of the body, so a reviewer can still see where
+ * a production send would have gone. Leave empty to address real recipients.
+ */
+export const EMAIL_TEST_REDIRECT = (process.env.EMAIL_TEST_REDIRECT ?? "").trim();
 /** One-time password lifetime in seconds. */
 export const OTP_TTL_SECONDS = Math.max(60, Number(process.env.OTP_TTL_SECONDS ?? 300));
 /** Wrong-code attempts allowed before a challenge is burnt. */

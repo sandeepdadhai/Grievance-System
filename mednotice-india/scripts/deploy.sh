@@ -110,7 +110,7 @@ echo "[remote] writing /etc/mednotice.env"
 # redeploy never clears a mailbox configuration that already lives on the server.
 EMAIL_BLOCK=""
 EMAIL_MANAGED=""
-for name in EMAIL_ENABLED EMAIL_API_URL EMAIL_API_KEY EMAIL_FROM EMAIL_ADMIN_RECIPIENTS EMAIL_SIMULATE; do
+for name in EMAIL_ENABLED EMAIL_API_URL EMAIL_API_KEY EMAIL_FROM EMAIL_ADMIN_RECIPIENTS EMAIL_SIMULATE EMAIL_TEST_REDIRECT; do
   value="${!name:-}"
   [ -n "$value" ] || continue
   EMAIL_BLOCK="${EMAIL_BLOCK}${name}=${value}"$'\n'

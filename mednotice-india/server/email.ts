@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { EMAIL_API_KEY, EMAIL_API_URL, EMAIL_ENABLED, EMAIL_FROM, EMAIL_SIMULATE, OUTBOX_DIR } from "./config.js";
+import { EMAIL_API_KEY, EMAIL_API_URL, EMAIL_ENABLED, EMAIL_FROM, EMAIL_SIMULATE, EMAIL_TEST_REDIRECT, OUTBOX_DIR } from "./config.js";
 import { randomCode } from "./crypto.js";
 
 /**
@@ -26,6 +26,8 @@ export type EmailStatus = {
   /** True when messages are written to $DATA_DIR/outbox instead of being sent. */
   simulated: boolean;
   from: string;
+  /** When set, every message is delivered here instead of the real recipient. */
+  testRedirect: string | null;
 };
 
 export function emailStatus(): EmailStatus {
@@ -35,6 +37,7 @@ export function emailStatus(): EmailStatus {
     configured,
     simulated: !configured || EMAIL_SIMULATE,
     from: EMAIL_FROM,
+    testRedirect: EMAIL_TEST_REDIRECT || null,
   };
 }
 
@@ -79,15 +82,26 @@ export async function sendEmail(input: {
   if (!status.enabled) {
     return { provider: "EMAIL", reference: null, simulated: true, error: "Email channel is disabled (EMAIL_ENABLED=0)" };
   }
+  // In a demonstration every message goes to one test mailbox; the real
+  // addressee stays visible in the subject and as the first body line so the
+  // routing decision is still auditable.
+  const redirect = status.testRedirect;
+  const to = redirect ?? input.to;
+  const subject = redirect && redirect.toLowerCase() !== input.to.toLowerCase()
+    ? `[test → ${input.to}] ${input.subject}`
+    : input.subject;
+  const text = redirect && redirect.toLowerCase() !== input.to.toLowerCase()
+    ? `Test delivery — production recipient: ${input.to}\n\n${input.text}`
+    : input.text;
   if (status.simulated) {
-    const file = writeOutbox(input.to, input.subject, input.text, input.kind);
+    const file = writeOutbox(to, subject, text, input.kind);
     return { provider: "OUTBOX", reference: file, simulated: true, error: null };
   }
   try {
     const res = await fetch(EMAIL_API_URL, {
       method: "POST",
       headers: { authorization: `Bearer ${EMAIL_API_KEY}`, "content-type": "application/json" },
-      body: JSON.stringify({ from: EMAIL_FROM, to: input.to, subject: input.subject, text: input.text }),
+      body: JSON.stringify({ from: EMAIL_FROM, to, subject, text }),
       signal: AbortSignal.timeout(10_000),
     });
     const payload = (await res.text().catch(() => "")) as string;
