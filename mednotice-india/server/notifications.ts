@@ -3,7 +3,7 @@ import { all, get, nowIso, run } from "./db.js";
 import { audit } from "./audit.js";
 import { findJurisdiction } from "./config.js";
 import { findAuthority } from "./registry.js";
-import { EMAIL_ADMIN_RECIPIENTS, MASTER_KEY, PRIORITY_LABELS, PUBLIC_URL } from "./config.js";
+import { EMAIL_ADMIN_RECIPIENTS, EMAIL_TEST_REDIRECT, MASTER_KEY, PRIORITY_LABELS, PUBLIC_URL } from "./config.js";
 import { sendEmail } from "./email.js";
 import { decryptField, maskEmail, maskName, maskText, randomCode } from "./crypto.js";
 import { maskWhatsAppNumber, normalizeWhatsAppNumber, sendWhatsAppMessage, whatsappStatus } from "./whatsapp.js";
@@ -78,6 +78,10 @@ function buildNotice(caseRow: CaseRow, documents: DocumentRow[], adapterCode: st
  * administrators first, then any extra addresses, with duplicates removed.
  */
 function emailRecipients(extra: Array<string | null | undefined> = []): string[] {
+  // A demonstration deployment collapses every addressee into one test
+  // mailbox. The message itself still names the production recipient, and the
+  // callers below keep the routing decision in the audit trail.
+  if (EMAIL_TEST_REDIRECT) return [EMAIL_TEST_REDIRECT];
   const seen = new Set<string>();
   for (const value of [...extra, ...EMAIL_ADMIN_RECIPIENTS]) {
     const address = (value ?? "").trim();
@@ -219,13 +223,19 @@ export function queueCaseEmailNotice(
   let queued = 0;
   for (const target of recipients) {
     const id = `NTF-${randomCode(10)}`;
+    // When a demonstration redirect is active the row is addressed to the test
+    // mailbox; the subject keeps the production addressee so the message log
+    // still shows where the notice would really have gone.
+    const addressedTo = EMAIL_TEST_REDIRECT
+      ? `[test → ${authority?.authority.contactEmail ?? caseRow.authority_id}] ${subject}`.slice(0, 240)
+      : subject;
     run(
       `INSERT INTO notifications (id, case_id, channel, target, subject, body, status, attempts, next_attempt_at, created_at)
        VALUES (?, ?, 'EMAIL', ?, ?, ?, 'QUEUED', 0, ?, ?)`,
       id,
       caseRow.id,
       target,
-      subject,
+      addressedTo,
       body,
       now,
       now,
